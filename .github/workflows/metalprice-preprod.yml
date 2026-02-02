@@ -35,23 +35,50 @@ jobs:
         run: dotnet publish -c Release -o out
 
       - name: Setup SSH
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
+          # Port secret'i yoksa 22 kullan
+          SSH_PORT="${{ secrets.SSH_PORT }}"
+          if [ -z "${SSH_PORT}" ]; then
+            SSH_PORT="22"
+          fi
+
           if [ -n "${{ secrets.SSH_KNOWN_HOSTS }}" ]; then
             echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
           else
-            ssh-keyscan -p ${{ secrets.SSH_PORT }} -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+            ssh-keyscan -p "${SSH_PORT}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
           fi
 
+          echo "Using SSH port: ${SSH_PORT}"
+
       - name: Upload files (rsync)
+        shell: bash
         run: |
-          rsync -avz --delete -e "ssh -p ${{ secrets.SSH_PORT }}" \
+          set -euo pipefail
+
+          SSH_PORT="${{ secrets.SSH_PORT }}"
+          if [ -z "${SSH_PORT}" ]; then
+            SSH_PORT="22"
+          fi
+
+          rsync -avz --delete -e "ssh -p ${SSH_PORT}" \
             out/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ inputs.target_path }}/
 
       - name: Restart systemd service
+        shell: bash
         run: |
-          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+          set -euo pipefail
+
+          SSH_PORT="${{ secrets.SSH_PORT }}"
+          if [ -z "${SSH_PORT}" ]; then
+            SSH_PORT="22"
+          fi
+
+          ssh -p "${SSH_PORT}" ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
             "sudo systemctl restart ${{ inputs.service_name }} && sudo systemctl status ${{ inputs.service_name }} --no-pager"
