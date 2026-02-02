@@ -17,10 +17,10 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Restore
-        run: dotnet restore ./PATH/TO/MetalPrice.Service.csproj
+        run: dotnet restore ./MetalPriceService/MetalPrice.Service/MetalPrice.Service.csproj
 
       - name: Publish
-        run: dotnet publish ./PATH/TO/MetalPrice.Service.csproj -c Release -o out
+        run: dotnet publish ./MetalPriceService/MetalPrice.Service/MetalPrice.Service.csproj -c Release -o out
 
       - name: Copy to server
         uses: appleboy/scp-action@v0.1.7
