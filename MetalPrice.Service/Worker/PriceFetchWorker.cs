@@ -4,9 +4,7 @@ using MetalPrice.Service.Helper;
 using MetalPrice.Service.Options;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using System.Net.Http;
 using System.Net.Http.Json;
-
 
 namespace MetalPrice.Service.Worker
 {
@@ -35,28 +33,62 @@ namespace MetalPrice.Service.Worker
             {
                 var times = await GetTimesAsync(stoppingToken);
 
-                var nextRun = ScheduleHelper.GetNextRun(DateTime.Now, times);
+                var now = DateTime.Now;
+                var (nextRun, slot) = GetNextRunWithSlot(now, times);
+
                 var delay = nextRun - DateTime.Now;
                 if (delay < TimeSpan.Zero) delay = TimeSpan.FromSeconds(1);
 
-                _logger.LogInformation("Next run at {NextRun}.", nextRun);
+                _logger.LogInformation("Next run at {NextRun} (slot: {Slot}).", nextRun, slot);
                 await Task.Delay(delay, stoppingToken);
 
                 try
                 {
-                    var snapshot = await FetchUsdPricesAsync(stoppingToken);
+                    var snapshot = await FetchUsdPricesAsync(slot, stoppingToken);
 
                     await using var db = await _dbFactory.CreateDbContextAsync(stoppingToken);
                     db.MetalPriceSnapshots.Add(snapshot);
-                    await db.SaveChangesAsync(stoppingToken);
 
-                    _logger.LogInformation("Saved prices at {TakenAtUtc}.", snapshot.TakenAtUtc);
+                    await db.SaveChangesAsync(stoppingToken);
+                    _logger.LogInformation("Saved prices at {TakenAtUtc} (slot: {Slot}).", snapshot.TakenAtUtc, snapshot.RunSlot);
+                }
+                catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+                {
+                    // Same day + same slot already exists (restart / retry / double run)
+                    _logger.LogWarning("Snapshot already exists for today (slot: {Slot}). Skipping.", slot);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to fetch/save prices.");
                 }
             }
+        }
+
+        private static (DateTime nextRun, string slot) GetNextRunWithSlot(DateTime now, List<TimeOnly> times)
+        {
+            // 2 time bekliyoruz: [0]=morning, [1]=evening
+            // Eğer farklıysa, sıraya göre slot üretir.
+            var nextRun = ScheduleHelper.GetNextRun(now, times);
+
+            var nextTime = TimeOnly.FromDateTime(nextRun);
+
+            // En yakın match: time listesinde hangi index ise onu slot yap
+            var idx = times.FindIndex(t => t == nextTime);
+
+            if (idx == 0) return (nextRun, "morning");
+            if (idx == 1) return (nextRun, "evening");
+
+            // fallback: time string
+            return (nextRun, $"t_{nextTime:HHmm}");
+        }
+
+        private static bool IsUniqueViolation(DbUpdateException ex)
+        {
+            // SQL Server unique constraint/index violation: 2601, 2627
+            if (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx)
+                return sqlEx.Number is 2601 or 2627;
+
+            return false;
         }
 
         private async Task<List<TimeOnly>> GetTimesAsync(CancellationToken ct)
@@ -74,28 +106,27 @@ namespace MetalPrice.Service.Worker
                 return opt.Times.Select(ScheduleHelper.ParseTimeOnly).ToList();
 
             return new List<TimeOnly>
-        {
-            ScheduleHelper.ParseTimeOnly(row.MorningTime),
-            ScheduleHelper.ParseTimeOnly(row.EveningTime)
-        };
+            {
+                ScheduleHelper.ParseTimeOnly(row.MorningTime),
+                ScheduleHelper.ParseTimeOnly(row.EveningTime)
+            };
         }
 
-        private async Task<MetalPriceSnapshot> FetchUsdPricesAsync(CancellationToken ct)
+        private async Task<MetalPriceSnapshot> FetchUsdPricesAsync(string slot, CancellationToken ct)
         {
             var opt = _opt.CurrentValue;
             var http = _httpClientFactory.CreateClient("metals");
 
-            // USD bazında istiyorsun -> base=USD (sağlayıcının desteklediği şekilde)
             var url =
                 $"https://metals-api.com/api/latest?access_key={Uri.EscapeDataString(opt.ApiKey)}&base=USD&symbols=XAU,XAG,XPT,XPD";
 
             var resp = await http.GetFromJsonAsync<MetalsApiLatestResponse>(url, ct)
                        ?? throw new InvalidOperationException("Empty response.");
 
-            // Sağlayıcı farklı döndürürse burayı uyarlarsın.
             return new MetalPriceSnapshot
             {
                 TakenAtUtc = DateTime.UtcNow,
+                RunSlot = slot,
                 BaseCurrency = "USD",
                 XAU = resp.rates["XAU"],
                 XAG = resp.rates["XAG"],
@@ -110,5 +141,4 @@ namespace MetalPrice.Service.Worker
             public Dictionary<string, decimal> rates { get; set; } = new();
         }
     }
-
 }

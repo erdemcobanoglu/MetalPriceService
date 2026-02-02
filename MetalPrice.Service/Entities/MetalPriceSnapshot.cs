@@ -1,22 +1,28 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace MetalPrice.Service.Entities
 {
     public sealed class MetalPriceSnapshot
     {
         public long Id { get; set; }
+
         public DateTime TakenAtUtc { get; set; }
 
-        public string BaseCurrency { get; set; } = "USD"; // sabit USD
+        // SQL computed column: CAST(TakenAtUtc as date)
+        public DateTime TakenAtDate { get; private set; }
+
+        [Required, MaxLength(16)]
+        public string RunSlot { get; set; } = default!; // "morning" / "evening"
+
+        [Required, MaxLength(8)]
+        public string BaseCurrency { get; set; } = "USD";
+
         public decimal XAU { get; set; }
         public decimal XAG { get; set; }
         public decimal XPT { get; set; }
         public decimal XPD { get; set; }
 
-        public string Source { get; set; } = "metals-api";
+        [Required, MaxLength(64)]
+        public string Source { get; set; } = default!;
     }
 }

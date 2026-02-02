@@ -12,18 +12,23 @@ namespace MetalPrice.Service.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<ServiceSchedule>().HasKey(x => x.Id);
+            base.OnModelCreating(modelBuilder);
 
-            // İstersen ilk kuruluma varsayılan schedule seed
-            modelBuilder.Entity<ServiceSchedule>().HasData(new ServiceSchedule
+            modelBuilder.Entity<MetalPriceSnapshot>(e =>
             {
-                Id = 1,
-                MorningTime = "09:00",
-                EveningTime = "18:00",
-                UpdatedAtUtc = DateTime.UtcNow
-            });
+                e.Property(x => x.RunSlot)
+                    .HasMaxLength(16)
+                    .IsRequired();
 
-            modelBuilder.Entity<MetalPriceSnapshot>().HasIndex(x => x.TakenAtUtc);
+                // SQL Server computed, persisted date from TakenAtUtc
+                e.Property(x => x.TakenAtDate)
+                    .HasComputedColumnSql("CAST([TakenAtUtc] AS date)", stored: true);
+
+                // UNIQUE: one row per day per slot
+                e.HasIndex(x => new { x.TakenAtDate, x.RunSlot })
+                    .IsUnique()
+                    .HasDatabaseName("UX_MetalPriceSnapshot_TakenAtDate_RunSlot");
+            });
         }
     }
 }
