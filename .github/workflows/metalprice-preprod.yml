@@ -40,7 +40,7 @@ jobs:
           set -euo pipefail
 
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
           # Port secret'i yoksa 22 kullan
