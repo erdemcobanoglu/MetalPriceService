@@ -20,7 +20,7 @@ jobs:
         run: dotnet restore ./MetalPrice.Service/MetalPrice.Service.csproj
 
       - name: Publish
-        run: dotnet publish ./MetalPrice.Service/MetalPrice.Service.csproj -c Release -o out
+        run: dotnet publish ./MetalPrice.Service/MetalPrice.Service.csproj -c Release -o publish
 
       - name: Copy to server
         uses: appleboy/scp-action@v0.1.7
