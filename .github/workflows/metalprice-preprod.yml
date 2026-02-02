@@ -1,23 +1,10 @@
 name: Deploy MetalPrice Worker
 
 on:
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: "Deploy environment etiketi (bilgi amaçlı)"
-        required: true
-        default: "preprod"
-      target_path:
-        description: "Sunucudaki hedef dizin"
-        required: true
-        default: "/var/www/metalprice-worker"
-      service_name:
-        description: "Restart edilecek systemd servis adı (bilgi amaçlı)"
-        required: true
-        default: "metalprice-worker"
+  workflow_dispatch: {}   # Manuel tetikleme
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -35,20 +22,19 @@ jobs:
       - name: Publish
         run: dotnet publish -c Release -o out
 
-      - name: Copy to server (SCP)
+      - name: Copy to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT }}
           source: "out/*"
-          target: ${{ inputs.target_path }}
+          target: "/var/www/metalprice-worker"
           strip_components: 1
 
       - name: Deploy done (manual restart required)
         run: |
-          echo "✅ Files copied to: ${{ inputs.target_path }}"
+          echo "✅ Files copied to: /var/www/metalprice-worker"
           echo "ℹ️ Please restart the service manually on the server:"
-          echo "   sudo systemctl restart ${{ inputs.service_name }}"
-          echo "   sudo systemctl status  ${{ inputs.service_name }} --no-pager"
+          echo "   sudo systemctl restart metalprice-worker"
+          echo "   sudo systemctl status  metalprice-worker --no-pager"
