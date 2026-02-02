@@ -17,10 +17,10 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore ./PATH/TO/MetalPriceWorker.csproj
 
       - name: Publish
-        run: dotnet publish -c Release -o out
+        run: dotnet publish ./PATH/TO/MetalPriceWorker.csproj -c Release -o out
 
       - name: Copy to server
         uses: appleboy/scp-action@v0.1.7
@@ -28,7 +28,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          source: "out/*"
+          source: "publish/*"
           target: "/var/www/metalprice-worker"
           strip_components: 1
 
