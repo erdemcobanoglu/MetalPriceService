@@ -12,7 +12,7 @@ on:
         required: true
         default: "/var/www/metalprice-worker"
       service_name:
-        description: "Restart edilecek systemd servis adı"
+        description: "Restart edilecek systemd servis adı (bilgi amaçlı)"
         required: true
         default: "metalprice-worker"
 
@@ -21,7 +21,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -34,51 +35,20 @@ jobs:
       - name: Publish
         run: dotnet publish -c Release -o out
 
-      - name: Setup SSH
-        shell: bash
+      - name: Copy to server (SCP)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          source: "out/*"
+          target: ${{ inputs.target_path }}
+          strip_components: 1
+
+      - name: Deploy done (manual restart required)
         run: |
-          set -euo pipefail
-
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-
-          # Port secret'i yoksa 22 kullan
-          SSH_PORT="${{ secrets.SSH_PORT }}"
-          if [ -z "${SSH_PORT}" ]; then
-            SSH_PORT="22"
-          fi
-
-          if [ -n "${{ secrets.SSH_KNOWN_HOSTS }}" ]; then
-            echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-          else
-            ssh-keyscan -p "${SSH_PORT}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
-          fi
-
-          echo "Using SSH port: ${SSH_PORT}"
-
-      - name: Upload files (rsync)
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          SSH_PORT="${{ secrets.SSH_PORT }}"
-          if [ -z "${SSH_PORT}" ]; then
-            SSH_PORT="22"
-          fi
-
-          rsync -avz --delete -e "ssh -p ${SSH_PORT}" \
-            out/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ inputs.target_path }}/
-
-      - name: Restart systemd service
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          SSH_PORT="${{ secrets.SSH_PORT }}"
-          if [ -z "${SSH_PORT}" ]; then
-            SSH_PORT="22"
-          fi
-
-          ssh -p "${SSH_PORT}" ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-            "sudo systemctl restart ${{ inputs.service_name }} && sudo systemctl status ${{ inputs.service_name }} --no-pager"
+          echo "✅ Files copied to: ${{ inputs.target_path }}"
+          echo "ℹ️ Please restart the service manually on the server:"
+          echo "   sudo systemctl restart ${{ inputs.service_name }}"
+          echo "   sudo systemctl status  ${{ inputs.service_name }} --no-pager"
