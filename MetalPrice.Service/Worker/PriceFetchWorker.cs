@@ -34,13 +34,18 @@ namespace MetalPrice.Service.Worker
                 var times = await GetTimesAsync(stoppingToken);
 
                 var now = DateTime.Now;
-                var (nextRun, slot) = GetNextRunWithSlot(now, times);
+                var (nextRun, slot) = GetNextRunWithSlot(now, times.Times);
 
                 var delay = nextRun - DateTime.Now;
                 if (delay < TimeSpan.Zero) delay = TimeSpan.FromSeconds(1);
 
                 _logger.LogInformation("Next run at {NextRun} (slot: {Slot}).", nextRun, slot);
-                await Task.Delay(delay, stoppingToken);
+#if DEBUG
+                await Task.Delay(TimeSpan.FromMilliseconds(1000), stoppingToken);
+#else
+    await Task.Delay(delay, stoppingToken);
+#endif
+
 
                 try
                 {
@@ -48,6 +53,8 @@ namespace MetalPrice.Service.Worker
 
                     await using var db = await _dbFactory.CreateDbContextAsync(stoppingToken);
                     db.MetalPriceSnapshots.Add(snapshot);
+
+                    await EnsureServiceScheduleExistsAsync(db, stoppingToken, slot);
 
                     await db.SaveChangesAsync(stoppingToken);
                     _logger.LogInformation("Saved prices at {TakenAtUtc} (slot: {Slot}).", snapshot.TakenAtUtc, snapshot.RunSlot);
@@ -84,32 +91,39 @@ namespace MetalPrice.Service.Worker
             return false;
         }
 
-        private async Task<List<TimeOnly>> GetTimesAsync(CancellationToken ct)
+        private Task<(List<TimeOnly> Times, bool FromDb)> GetTimesAsync(CancellationToken ct)
         {
             var opt = _opt.CurrentValue;
 
-            if (!opt.UseDatabaseSchedule)
-                return opt.Times.Select(ScheduleHelper.ParseTimeOnly).ToList();
+            // Sadece appsettings'ten oku
+            var rawTimes = opt.Times ?? Array.Empty<string>();
 
-            await using var db = await _dbFactory.CreateDbContextAsync(ct);
-            var row = await db.ServiceSchedules.AsNoTracking().FirstOrDefaultAsync(x => x.Id == 1, ct);
+            var parsed = rawTimes
+                .Where(t => !string.IsNullOrWhiteSpace(t))
+                .Select(ScheduleHelper.ParseTimeOnly)
+                .Distinct()
+                .OrderBy(t => t)
+                .ToList();
 
-            if (row is null)
-                return opt.Times.Select(ScheduleHelper.ParseTimeOnly).ToList();
-
-            return new List<TimeOnly>
+            // Hiç geçerli değer yoksa fallback
+            if (parsed.Count == 0)
             {
-                ScheduleHelper.ParseTimeOnly(row.MorningTime),
-                ScheduleHelper.ParseTimeOnly(row.EveningTime)
-            };
-        }
+                parsed = new List<TimeOnly>
+        {
+            new TimeOnly(9, 0),
+            new TimeOnly(18, 0)
+        };
+            }
+
+            // FromDb her zaman false
+            return Task.FromResult((parsed, false));
+        } 
 
         private async Task<MetalPriceSnapshot> FetchUsdPricesAsync(string slot, CancellationToken ct)
         {
             var opt = _opt.CurrentValue;
             var http = _httpClientFactory.CreateClient("metals");
-
-            // DİKKAT: URL'de boşluk yok!
+             
             var url =
                 $"https://api.metals.dev/v1/latest?api_key={Uri.EscapeDataString(opt.ApiKey)}&currency=USD&unit=toz";
 
@@ -132,11 +146,9 @@ namespace MetalPrice.Service.Worker
             {
                 TakenAtUtc = DateTime.UtcNow,
                 RunSlot = slot,
-
-                // response zaten USD dönüyor ama yine de payload'dan alalım
+                 
                 BaseCurrency = resp.currency ?? "USD",
-
-                // Entity alanlarına map
+                 
                 XAU = gold,
                 XAG = silver,
                 XPT = platinum,
@@ -145,6 +157,49 @@ namespace MetalPrice.Service.Worker
                 Source = "metals.dev"
             };
         }
-         
+
+        private async Task EnsureServiceScheduleExistsAsync(AppDbContext db, CancellationToken ct, string slot)
+        {
+            var nowUtc = DateTime.UtcNow;
+             
+            var morningValue = string.Equals(slot, "morning", StringComparison.OrdinalIgnoreCase) ? "morning" : string.Empty;
+            var eveningValue = string.Equals(slot, "evening", StringComparison.OrdinalIgnoreCase) ? "evening" : string.Empty;
+             
+            var updated = await db.ServiceSchedules
+                .Where(x => x.Id == 1)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(x => x.UpdatedAtUtc, nowUtc)
+                    .SetProperty(x => x.MorningTime, morningValue)
+                    .SetProperty(x => x.EveningTime, eveningValue), ct);
+
+            if (updated > 0)
+            {
+                _logger.LogInformation(
+                    "ServiceSchedules(Id=1) updated. Slot={Slot}, MorningFlag={MorningFlag}, EveningFlag={EveningFlag}, UpdatedAtUtc={UpdatedAtUtc}",
+                    slot, morningValue, eveningValue, nowUtc);
+                return;
+            }
+             
+            db.ServiceSchedules.Add(new ServiceSchedule
+            { 
+                MorningTime = morningValue,
+                EveningTime = eveningValue,
+                UpdatedAtUtc = nowUtc
+            });
+
+            _logger.LogInformation(
+                "ServiceSchedules(Id=1) created. Slot={Slot}, MorningFlag={MorningFlag}, EveningFlag={EveningFlag}, UpdatedAtUtc={UpdatedAtUtc}",
+                slot, morningValue, eveningValue, nowUtc);
+        }
+
+
+        private static (string Morning, string Evening) NormalizeTimes(List<TimeOnly> times)
+        { 
+            var morning = (times.Count >= 1 ? times[0] : new TimeOnly(9, 0)).ToString("HH:mm");
+            var evening = (times.Count >= 2 ? times[1] : new TimeOnly(21, 0)).ToString("HH:mm");
+            return (morning, evening);
+        }
+
+
     }
 }

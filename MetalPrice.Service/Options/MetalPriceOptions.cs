@@ -10,6 +10,6 @@ namespace MetalPrice.Service.Options
     {
         public string ApiKey { get; set; } = "";
         public bool UseDatabaseSchedule { get; set; } = true;
-        public string[] Times { get; set; } = new[] { "09:00", "18:00" };
+        public string[] Times { get; set; } = Array.Empty<string>();
     }
 }
