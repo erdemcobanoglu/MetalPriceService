@@ -2,10 +2,17 @@
 using MetalPrice.Service.Options;
 using MetalPrice.Service.Worker;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Serilog;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// Serilog'u config'den oku ve Host'a entegre et
+builder.Services.AddSerilog((services, lc) => lc
+    .ReadFrom.Configuration(builder.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+);
 
 builder.Services.Configure<MetalPriceOptions>(
     builder.Configuration.GetSection("MetalPrice"));
@@ -19,7 +26,6 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
 {
     options.UseSqlServer(connectionString, sql =>
     {
-        // Docker / network / ilk bağlantı anındaki geçici hatalara karşı
         sql.EnableRetryOnFailure(
             maxRetryCount: 5,
             maxRetryDelay: TimeSpan.FromSeconds(10),
@@ -34,4 +40,18 @@ builder.Services.AddHttpClient("metals", c =>
 
 builder.Services.AddHostedService<PriceFetchWorker>();
 
-await builder.Build().RunAsync();
+var host = builder.Build();
+
+try
+{
+    Log.Information("MetalPrice.Service starting up");
+    await host.RunAsync();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "MetalPrice.Service terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}

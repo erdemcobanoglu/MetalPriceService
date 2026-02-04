@@ -29,44 +29,93 @@ namespace MetalPrice.Service.Worker
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            while (!stoppingToken.IsCancellationRequested)
+            _logger.LogInformation("PriceFetchWorker started.");
+
+            try
             {
-                var times = await GetTimesAsync(stoppingToken);
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    // 1) Schedule hesapla
+                    var times = await GetTimesAsync(stoppingToken);
 
-                var now = DateTime.Now;
-                var (nextRun, slot) = GetNextRunWithSlot(now, times.Times);
+                    var now = DateTime.Now;
+                    var (nextRun, slot) = GetNextRunWithSlot(now, times.Times);
 
-                var delay = nextRun - DateTime.Now;
-                if (delay < TimeSpan.Zero) delay = TimeSpan.FromSeconds(1);
+                    var delay = nextRun - DateTime.Now;
+                    if (delay < TimeSpan.Zero) delay = TimeSpan.FromSeconds(1);
 
-                _logger.LogInformation("Next run at {NextRun} (slot: {Slot}).", nextRun, slot);
+                    _logger.LogInformation("Next run at {NextRun} (slot: {Slot}).", nextRun, slot);
+
+                    // 2) Bekle (iptal normaldir)
+                    try
+                    {
 #if DEBUG
-                await Task.Delay(TimeSpan.FromMilliseconds(1000), stoppingToken);
+                        await Task.Delay(TimeSpan.FromMilliseconds(1000), stoppingToken);
 #else
-    await Task.Delay(delay, stoppingToken);
+                        await Task.Delay(delay, stoppingToken);
 #endif
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        // Normal kapanış
+                        break;
+                    }
 
+                    // 3) İşlem (her tur için scope eklemek çok faydalı)
+                    using (_logger.BeginScope(new Dictionary<string, object>
+                    {
+                        ["RunSlot"] = slot,
+                        ["TakenAtUtc"] = DateTime.UtcNow
+                    }))
+                    {
+                        try
+                        {
+                            _logger.LogInformation("Fetching prices...");
 
-                try
-                {
-                    var snapshot = await FetchUsdPricesAsync(slot, stoppingToken);
+                            var snapshot = await FetchUsdPricesAsync(slot, stoppingToken);
 
-                    await using var db = await _dbFactory.CreateDbContextAsync(stoppingToken);
-                    db.MetalPriceSnapshots.Add(snapshot);
+                            await using var db = await _dbFactory.CreateDbContextAsync(stoppingToken);
 
-                    await EnsureServiceScheduleExistsAsync(db, stoppingToken, slot);
+                            db.MetalPriceSnapshots.Add(snapshot);
 
-                    await db.SaveChangesAsync(stoppingToken);
-                    _logger.LogInformation("Saved prices at {TakenAtUtc} (slot: {Slot}).", snapshot.TakenAtUtc, snapshot.RunSlot);
+                            await EnsureServiceScheduleExistsAsync(db, stoppingToken, slot);
+
+                            await db.SaveChangesAsync(stoppingToken);
+
+                            _logger.LogInformation(
+                                "Saved prices. TakenAtUtc={TakenAtUtc}, Slot={Slot}, XAU={XAU}, XAG={XAG}, XPT={XPT}, XPD={XPD}",
+                                snapshot.TakenAtUtc, snapshot.RunSlot, snapshot.XAU, snapshot.XAG, snapshot.XPT, snapshot.XPD);
+                        }
+                        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+                        {
+                            _logger.LogWarning("Snapshot already exists for today (slot: {Slot}). Skipping.", slot);
+                        }
+                        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                        {
+                            // Normal kapanış
+                            break;
+                        }
+                        catch (HttpRequestException ex)
+                        {
+                            // Ağ/HTTP hatalarını ayrı görmek çok faydalı
+                            _logger.LogError(ex, "HTTP error while fetching prices.");
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Failed to fetch/save prices.");
+                        }
+                    }
                 }
-                catch (DbUpdateException ex) when (IsUniqueViolation(ex))
-                {
-                    _logger.LogWarning("Snapshot already exists for today (slot: {Slot}). Skipping.", slot);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to fetch/save prices.");
-                }
+            }
+            catch (Exception ex)
+            {
+                // Worker tamamen düşerse burası log basar
+                _logger.LogCritical(ex, "PriceFetchWorker crashed unexpectedly.");
+                throw; // Host tarafında da görülsün (istenirse kaldırılabilir)
+            }
+            finally
+            {
+                _logger.LogInformation("PriceFetchWorker stopped.");
             }
         }
 
@@ -85,17 +134,37 @@ namespace MetalPrice.Service.Worker
 
         private static bool IsUniqueViolation(DbUpdateException ex)
         {
-            if (ex.InnerException is Microsoft.Data.SqlClient.SqlException sqlEx)
-                return sqlEx.Number is 2601 or 2627;
+            // SQL Server
+            if (ContainsSqlError(ex, 2601, 2627))
+                return true;
+             
 
             return false;
         }
+
+        private static bool ContainsSqlError(Exception ex, params int[] errorNumbers)
+        {
+            var inner = ex;
+
+            while (inner != null)
+            {
+                if (inner is Microsoft.Data.SqlClient.SqlException sqlEx)
+                {
+                    if (errorNumbers.Contains(sqlEx.Number))
+                        return true;
+                }
+
+                inner = inner.InnerException;
+            }
+
+            return false;
+        }
+
 
         private Task<(List<TimeOnly> Times, bool FromDb)> GetTimesAsync(CancellationToken ct)
         {
             var opt = _opt.CurrentValue;
 
-            // Sadece appsettings'ten oku
             var rawTimes = opt.Times ?? Array.Empty<string>();
 
             var parsed = rawTimes
@@ -105,29 +174,29 @@ namespace MetalPrice.Service.Worker
                 .OrderBy(t => t)
                 .ToList();
 
-            // Hiç geçerli değer yoksa fallback
             if (parsed.Count == 0)
             {
                 parsed = new List<TimeOnly>
-        {
-            new TimeOnly(9, 0),
-            new TimeOnly(18, 0)
-        };
+                {
+                    new TimeOnly(9, 0),
+                    new TimeOnly(18, 0)
+                };
             }
 
-            // FromDb her zaman false
             return Task.FromResult((parsed, false));
-        } 
+        }
 
         private async Task<MetalPriceSnapshot> FetchUsdPricesAsync(string slot, CancellationToken ct)
         {
             var opt = _opt.CurrentValue;
             var http = _httpClientFactory.CreateClient("metals");
-             
+
+            if (string.IsNullOrWhiteSpace(opt.ApiKey))
+                throw new InvalidOperationException("MetalPrice:ApiKey is empty. appsettings.json kontrol edin.");
+
             var url =
                 $"https://api.metals.dev/v1/latest?api_key={Uri.EscapeDataString(opt.ApiKey)}&currency=USD&unit=toz";
 
-            // metals.dev response
             var resp = await http.GetFromJsonAsync<MetalsDevLatestResponse>(url, ct)
                        ?? throw new InvalidOperationException("Empty response.");
 
@@ -146,14 +215,11 @@ namespace MetalPrice.Service.Worker
             {
                 TakenAtUtc = DateTime.UtcNow,
                 RunSlot = slot,
-                 
                 BaseCurrency = resp.currency ?? "USD",
-                 
                 XAU = gold,
                 XAG = silver,
                 XPT = platinum,
                 XPD = palladium,
-
                 Source = "metals.dev"
             };
         }
@@ -161,10 +227,10 @@ namespace MetalPrice.Service.Worker
         private async Task EnsureServiceScheduleExistsAsync(AppDbContext db, CancellationToken ct, string slot)
         {
             var nowUtc = DateTime.UtcNow;
-             
+
             var morningValue = string.Equals(slot, "morning", StringComparison.OrdinalIgnoreCase) ? "morning" : string.Empty;
             var eveningValue = string.Equals(slot, "evening", StringComparison.OrdinalIgnoreCase) ? "evening" : string.Empty;
-             
+
             var updated = await db.ServiceSchedules
                 .Where(x => x.Id == 1)
                 .ExecuteUpdateAsync(setters => setters
@@ -179,9 +245,9 @@ namespace MetalPrice.Service.Worker
                     slot, morningValue, eveningValue, nowUtc);
                 return;
             }
-             
+
             db.ServiceSchedules.Add(new ServiceSchedule
-            { 
+            {
                 MorningTime = morningValue,
                 EveningTime = eveningValue,
                 UpdatedAtUtc = nowUtc
@@ -191,15 +257,5 @@ namespace MetalPrice.Service.Worker
                 "ServiceSchedules(Id=1) created. Slot={Slot}, MorningFlag={MorningFlag}, EveningFlag={EveningFlag}, UpdatedAtUtc={UpdatedAtUtc}",
                 slot, morningValue, eveningValue, nowUtc);
         }
-
-
-        private static (string Morning, string Evening) NormalizeTimes(List<TimeOnly> times)
-        { 
-            var morning = (times.Count >= 1 ? times[0] : new TimeOnly(9, 0)).ToString("HH:mm");
-            var evening = (times.Count >= 2 ? times[1] : new TimeOnly(21, 0)).ToString("HH:mm");
-            return (morning, evening);
-        }
-
-
     }
 }
