@@ -25,8 +25,7 @@ namespace MetalPrice.Service.Data
                     .HasComputedColumnSql("CAST([TakenAtUtc] AS date)", stored: true);
 
                 // UNIQUE: one row per day per slot
-                e.HasIndex(x => new { x.TakenAtDate, x.RunSlot })
-                    .IsUnique()
+                e.HasIndex(x => new { x.TakenAtDate, x.RunSlot }) 
                     .HasDatabaseName("UX_MetalPriceSnapshot_TakenAtDate_RunSlot");
             });
         }

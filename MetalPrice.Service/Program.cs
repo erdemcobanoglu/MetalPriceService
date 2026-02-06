@@ -1,5 +1,7 @@
-﻿using MetalPrice.Service.Data;
+﻿using MetalPrice.Service.Abstractions;
+using MetalPrice.Service.Data;
 using MetalPrice.Service.Options;
+using MetalPrice.Service.Services;
 using MetalPrice.Service.Worker;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
@@ -7,7 +9,7 @@ using Serilog;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// Serilog'u config'den oku ve Host'a entegre et
+// Read Serilog from config and Host integration
 builder.Services.AddSerilog((services, lc) => lc
     .ReadFrom.Configuration(builder.Configuration)
     .ReadFrom.Services(services)
@@ -38,6 +40,11 @@ builder.Services.AddHttpClient("metals", c =>
     c.Timeout = TimeSpan.FromSeconds(20);
 });
 
+// OOP: Schedule + Job services
+builder.Services.AddSingleton<IRunScheduleProvider, OptionsRunScheduleProvider>();
+builder.Services.AddSingleton<IPriceSnapshotJob, MetalsDevSnapshotJob>();
+
+// Worker
 builder.Services.AddHostedService<PriceFetchWorker>();
 
 var host = builder.Build();
