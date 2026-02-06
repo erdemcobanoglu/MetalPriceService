@@ -35,36 +35,41 @@ namespace MetalPrice.Service.Worker
             {
                 while (!stoppingToken.IsCancellationRequested)
                 {
-                    // 1) Schedule hesapla
-                    var times = await GetTimesAsync(stoppingToken);
+                    // 1) Schedule oku/parse et
+                    var schedule = await GetTimesAsync(stoppingToken);
+                    var times = schedule.Times;
 
+                    // 2) Next run hesapla
                     var now = DateTime.Now;
-                    var (nextRun, slot) = GetNextRunWithSlot(now, times.Times);
+                    var nextRun = ScheduleHelper.GetNextRun(now, times);
 
-                    var delay = nextRun - DateTime.Now;
+                    // Slot'ı deterministik yap: t_HHmm
+                    var slot = $"t_{TimeOnly.FromDateTime(nextRun):HHmm}";
+
+                    // Delay'i aynı "now" ile hesapla (drift/negatif riskini azaltır)
+                    var delay = nextRun - now;
                     if (delay < TimeSpan.Zero) delay = TimeSpan.FromSeconds(1);
 
-                    _logger.LogInformation("Next run at {NextRun} (slot: {Slot}).", nextRun, slot);
+                    _logger.LogInformation(
+                        "Schedule computed. Now={Now}, NextRun={NextRun}, Delay={Delay}, Slot={Slot}, Times=[{Times}]",
+                        now, nextRun, delay, slot, string.Join(", ", times.Select(t => t.ToString("HH:mm")))
+                    );
 
-                    // 2) Bekle (iptal normaldir)
+                    // 3) Bekle (DEBUG/RELEASE farkı yok)
                     try
                     {
-#if DEBUG
-                        await Task.Delay(TimeSpan.FromMilliseconds(1000), stoppingToken);
-#else
                         await Task.Delay(delay, stoppingToken);
-#endif
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                     {
-                        // Normal kapanış
-                        break;
+                        break; // normal kapanış
                     }
 
-                    // 3) İşlem (her tur için scope eklemek çok faydalı)
+                    // 4) İşlem (scope)
                     using (_logger.BeginScope(new Dictionary<string, object>
                     {
                         ["RunSlot"] = slot,
+                        ["NextRunLocal"] = nextRun,
                         ["TakenAtUtc"] = DateTime.UtcNow
                     }))
                     {
@@ -78,7 +83,7 @@ namespace MetalPrice.Service.Worker
 
                             db.MetalPriceSnapshots.Add(snapshot);
 
-                            await EnsureServiceScheduleExistsAsync(db, stoppingToken, slot);
+                            await EnsureServiceScheduleExistsAsync(db, stoppingToken, slot, times);
 
                             await db.SaveChangesAsync(stoppingToken);
 
@@ -92,12 +97,10 @@ namespace MetalPrice.Service.Worker
                         }
                         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                         {
-                            // Normal kapanış
                             break;
                         }
                         catch (HttpRequestException ex)
                         {
-                            // Ağ/HTTP hatalarını ayrı görmek çok faydalı
                             _logger.LogError(ex, "HTTP error while fetching prices.");
                         }
                         catch (Exception ex)
@@ -109,9 +112,8 @@ namespace MetalPrice.Service.Worker
             }
             catch (Exception ex)
             {
-                // Worker tamamen düşerse burası log basar
                 _logger.LogCritical(ex, "PriceFetchWorker crashed unexpectedly.");
-                throw; // Host tarafında da görülsün (istenirse kaldırılabilir)
+                throw;
             }
             finally
             {
@@ -119,27 +121,10 @@ namespace MetalPrice.Service.Worker
             }
         }
 
-        private static (DateTime nextRun, string slot) GetNextRunWithSlot(DateTime now, List<TimeOnly> times)
-        {
-            var nextRun = ScheduleHelper.GetNextRun(now, times);
-            var nextTime = TimeOnly.FromDateTime(nextRun);
-
-            var idx = times.FindIndex(t => t == nextTime);
-
-            if (idx == 0) return (nextRun, "morning");
-            if (idx == 1) return (nextRun, "evening");
-
-            return (nextRun, $"t_{nextTime:HHmm}");
-        }
-
         private static bool IsUniqueViolation(DbUpdateException ex)
         {
             // SQL Server
-            if (ContainsSqlError(ex, 2601, 2627))
-                return true;
-             
-
-            return false;
+            return ContainsSqlError(ex, 2601, 2627);
         }
 
         private static bool ContainsSqlError(Exception ex, params int[] errorNumbers)
@@ -148,18 +133,15 @@ namespace MetalPrice.Service.Worker
 
             while (inner != null)
             {
-                if (inner is Microsoft.Data.SqlClient.SqlException sqlEx)
-                {
-                    if (errorNumbers.Contains(sqlEx.Number))
-                        return true;
-                }
+                if (inner is Microsoft.Data.SqlClient.SqlException sqlEx &&
+                    errorNumbers.Contains(sqlEx.Number))
+                    return true;
 
                 inner = inner.InnerException;
             }
 
             return false;
         }
-
 
         private Task<(List<TimeOnly> Times, bool FromDb)> GetTimesAsync(CancellationToken ct)
         {
@@ -224,12 +206,25 @@ namespace MetalPrice.Service.Worker
             };
         }
 
-        private async Task EnsureServiceScheduleExistsAsync(AppDbContext db, CancellationToken ct, string slot)
+        /// <summary>
+        /// Mevcut tablona dokunmadan: ilk iki time'ı "morning/evening" gibi işaretlemek istersen.
+        /// Slotlar artık t_HHmm olduğu için burada karşılaştırmayı times listesi üzerinden yapıyoruz.
+        /// </summary>
+        private async Task EnsureServiceScheduleExistsAsync(AppDbContext db, CancellationToken ct, string slot, List<TimeOnly> times)
         {
             var nowUtc = DateTime.UtcNow;
 
-            var morningValue = string.Equals(slot, "morning", StringComparison.OrdinalIgnoreCase) ? "morning" : string.Empty;
-            var eveningValue = string.Equals(slot, "evening", StringComparison.OrdinalIgnoreCase) ? "evening" : string.Empty;
+            // İlk iki schedule zamanını "morning/evening" diye işaretle (senin mevcut kolonlara uyum için)
+            var morningSlot = times.Count >= 1 ? $"t_{times[0]:HHmm}" : null;
+            var eveningSlot = times.Count >= 2 ? $"t_{times[1]:HHmm}" : null;
+
+            var morningValue = (morningSlot != null && string.Equals(slot, morningSlot, StringComparison.OrdinalIgnoreCase))
+                ? "morning"
+                : string.Empty;
+
+            var eveningValue = (eveningSlot != null && string.Equals(slot, eveningSlot, StringComparison.OrdinalIgnoreCase))
+                ? "evening"
+                : string.Empty;
 
             var updated = await db.ServiceSchedules
                 .Where(x => x.Id == 1)

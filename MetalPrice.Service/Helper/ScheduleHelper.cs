@@ -19,19 +19,22 @@ namespace MetalPrice.Service.Helper
 
         public static DateTime GetNextRun(DateTime nowLocal, List<TimeOnly> times)
         {
-            if (times.Count == 0) throw new InvalidOperationException("No schedule times defined.");
+            if (times == null || times.Count == 0)
+                throw new InvalidOperationException("No schedule times defined.");
 
             var today = nowLocal.Date;
+
             var candidates = times
-                .Select(t => today.AddHours(t.Hour).AddMinutes(t.Minute))
-                .OrderBy(x => x)
-                .ToList();
+                .Select(t => today.Add(t.ToTimeSpan()))
+                .OrderBy(x => x);
 
-            var nextToday = candidates.FirstOrDefault(x => x > nowLocal);
-            if (nextToday != default) return nextToday;
+            var nextToday = candidates.FirstOrDefault(x => x >= nowLocal);
 
-            return candidates[0].AddDays(1);
+            return nextToday != default
+                ? nextToday
+                : today.AddDays(1).Add(times.Min().ToTimeSpan());
         }
+
     }
 
 }
