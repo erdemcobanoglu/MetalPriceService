@@ -22,6 +22,7 @@ namespace MetalPrice.Service.Worker
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("PriceFetchWorker started.");
+            bool isFirstRun = true;
 
             try
             {
@@ -41,7 +42,10 @@ namespace MetalPrice.Service.Worker
                         now, nextRun, delay, slot, string.Join(", ", times.Select(t => t.ToString("HH:mm")))
                     );
 
-                    await Task.Delay(delay, stoppingToken);
+                    if (!isFirstRun)
+                        await Task.Delay(delay, stoppingToken); 
+
+                    isFirstRun = false;
 
                     using (_logger.BeginScope(new Dictionary<string, object>
                     {
