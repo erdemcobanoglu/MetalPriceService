@@ -42,10 +42,14 @@ namespace MetalPrice.Service.Worker
                         now, nextRun, delay, slot, string.Join(", ", times.Select(t => t.ToString("HH:mm")))
                     );
 
-                    if (!isFirstRun)
-                        await Task.Delay(delay, stoppingToken); 
+                    #region Just Debug Open :) 
+                    //if (!isFirstRun)
+                    //    await Task.Delay(delay, stoppingToken); 
 
-                    isFirstRun = false;
+                    //isFirstRun = false; 
+                    #endregion
+
+                    await Task.Delay(delay, stoppingToken);
 
                     using (_logger.BeginScope(new Dictionary<string, object>
                     {

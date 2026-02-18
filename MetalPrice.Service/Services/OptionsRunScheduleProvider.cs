@@ -30,7 +30,7 @@ namespace MetalPrice.Service.Services
                 parsed = new List<TimeOnly>
                 {
                     new TimeOnly(9, 0),
-                    new TimeOnly(18, 0)
+                    new TimeOnly(23, 0)
                 };
             }
 
