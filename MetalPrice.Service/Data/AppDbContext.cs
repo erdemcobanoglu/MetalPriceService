@@ -31,10 +31,10 @@ namespace MetalPrice.Service.Data
                 e.Property(x => x.TakenAtDate)
                     .HasComputedColumnSql("CAST([TakenAtUtc] AS date)", stored: true);
                  
-                e.Property(x => x.XAU).HasPrecision(38, 18);
-                e.Property(x => x.XAG).HasPrecision(38, 18);
-                e.Property(x => x.XPT).HasPrecision(38, 18);
-                e.Property(x => x.XPD).HasPrecision(38, 18);
+                e.Property(x => x.XAU).HasPrecision(18, 2);
+                e.Property(x => x.XAG).HasPrecision(18, 2);
+                e.Property(x => x.XPT).HasPrecision(18, 2);
+                e.Property(x => x.XPD).HasPrecision(18, 2);
                  
                 e.Property(x => x.XAU_PerUsd).HasPrecision(38, 18);
                 e.Property(x => x.XAG_PerUsd).HasPrecision(38, 18);
