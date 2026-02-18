@@ -22,6 +22,12 @@ namespace MetalPrice.Service.Entities
         public decimal XPT { get; set; }
         public decimal XPD { get; set; }
 
+        public decimal XAU_PerUsd { get; set; }
+        public decimal XAG_PerUsd { get; set; }
+        public decimal XPT_PerUsd { get; set; }
+        public decimal XPD_PerUsd { get; set; }
+
+
         [Required, MaxLength(64)]
         public string Source { get; set; } = default!;
     }

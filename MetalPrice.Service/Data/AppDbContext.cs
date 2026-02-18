@@ -19,13 +19,31 @@ namespace MetalPrice.Service.Data
                 e.Property(x => x.RunSlot)
                     .HasMaxLength(16)
                     .IsRequired();
+                 
+                e.Property(x => x.BaseCurrency)
+                    .HasMaxLength(8)
+                    .IsRequired();
 
-                // SQL Server computed, persisted date from TakenAtUtc
+                e.Property(x => x.Source)
+                    .HasMaxLength(64)
+                    .IsRequired();
+                 
                 e.Property(x => x.TakenAtDate)
                     .HasComputedColumnSql("CAST([TakenAtUtc] AS date)", stored: true);
+                 
+                e.Property(x => x.XAU).HasPrecision(38, 18);
+                e.Property(x => x.XAG).HasPrecision(38, 18);
+                e.Property(x => x.XPT).HasPrecision(38, 18);
+                e.Property(x => x.XPD).HasPrecision(38, 18);
+                 
+                e.Property(x => x.XAU_PerUsd).HasPrecision(38, 18);
+                e.Property(x => x.XAG_PerUsd).HasPrecision(38, 18);
+                e.Property(x => x.XPT_PerUsd).HasPrecision(38, 18);
+                e.Property(x => x.XPD_PerUsd).HasPrecision(38, 18);
 
                 // UNIQUE: one row per day per slot
-                e.HasIndex(x => new { x.TakenAtDate, x.RunSlot }) 
+                e.HasIndex(x => new { x.TakenAtDate, x.RunSlot })
+                    .IsUnique() // ✅ bu önemli
                     .HasDatabaseName("UX_MetalPriceSnapshot_TakenAtDate_RunSlot");
             });
         }

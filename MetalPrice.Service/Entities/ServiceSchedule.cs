@@ -9,8 +9,8 @@ namespace MetalPrice.Service.Entities
     public sealed class ServiceSchedule
     {
         public int Id { get; set; }
-        public string MorningTime { get; set; } = "09:00";
-        public string EveningTime { get; set; } = "21:00";
+        public string MorningTime { get; set; }
+        public string EveningTime { get; set; }
         public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
     }
 }
