@@ -149,17 +149,13 @@ namespace MetalPrice.Service.Services
         {
             var nowUtc = DateTime.UtcNow;
 
-            // Mevcut kolonlarına uyum için: ilk iki zamanı morning/evening flag gibi işaretle
-            var morningSlot = times.Count >= 1 ? $"t_{times[0]:HHmm}" : null;
-            var eveningSlot = times.Count >= 2 ? $"t_{times[1]:HHmm}" : null;
-
-            var morningValue = (morningSlot != null && string.Equals(slot, morningSlot, StringComparison.OrdinalIgnoreCase))
+            var morningValue = slot.Equals("morning", StringComparison.OrdinalIgnoreCase)
                 ? "morning"
-                : string.Empty;
+                : null;
 
-            var eveningValue = (eveningSlot != null && string.Equals(slot, eveningSlot, StringComparison.OrdinalIgnoreCase))
+            var eveningValue = slot.Equals("evening", StringComparison.OrdinalIgnoreCase)
                 ? "evening"
-                : string.Empty;
+                : null;
 
             var updated = await db.ServiceSchedules
                 .Where(x => x.Id == 1)
@@ -172,10 +168,12 @@ namespace MetalPrice.Service.Services
 
             db.ServiceSchedules.Add(new ServiceSchedule
             {
-                MorningTime = morningValue,
-                EveningTime = eveningValue,
+                MorningTime = morningValue ?? "-",
+                EveningTime = eveningValue ?? "-",
                 UpdatedAtUtc = nowUtc
             });
+
+            await db.SaveChangesAsync(ct);
         }
 
         private static bool IsUniqueViolation(DbUpdateException ex)
