@@ -8,5 +8,7 @@ namespace TcmbRatesWorker.Application.Models
 {
     public class RatesSnapshot
     {
+        public DateOnly Date { get; init; }
+        public IReadOnlyList<MoneyRate> Rates { get; init; } = Array.Empty<MoneyRate>();
     }
 }

@@ -6,7 +6,16 @@ using System.Threading.Tasks;
 
 namespace TcmbRatesWorker.Application.Models
 {
-    public class MoneyRate
-    {
+    public sealed class MoneyRate
+    { 
+        public string Code { get; init; } = "";
+         
+        public int Unit { get; init; }
+
+        public decimal? ForexBuying { get; init; }
+        public decimal? ForexSelling { get; init; }
+
+        public decimal? BanknoteBuying { get; init; }
+        public decimal? BanknoteSelling { get; init; }
     }
 }
