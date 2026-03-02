@@ -9,16 +9,16 @@ namespace TcmbRatesWorker.Worker
     {
         private readonly ILogger<Worker> _logger;
         private readonly TcmbOptions _options;
-        private readonly RatesIngestionService _ingestion;
+        private readonly IServiceScopeFactory _scopeFactory;
 
         public Worker(
             ILogger<Worker> logger,
             IOptions<TcmbOptions> options,
-            RatesIngestionService ingestion)
+            IServiceScopeFactory scopeFactory)
         {
             _logger = logger;
             _options = options.Value;
-            _ingestion = ingestion;
+            _scopeFactory = scopeFactory;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -33,10 +33,7 @@ namespace TcmbRatesWorker.Worker
 
                 if (delay > TimeSpan.Zero)
                 {
-                    _logger.LogInformation(
-                        "Next run scheduled at {NextRunUtc} (UTC). Sleeping {Delay}.",
-                        nextRunUtc, delay);
-
+                    _logger.LogInformation("Next run scheduled at {NextRunUtc} (UTC). Sleeping {Delay}.", nextRunUtc, delay);
                     await Task.Delay(delay, stoppingToken);
                 }
 
@@ -44,7 +41,10 @@ namespace TcmbRatesWorker.Worker
 
                 try
                 {
-                    await _ingestion.IngestTodayAsync(expectedDate, stoppingToken);
+                    using var scope = _scopeFactory.CreateScope();
+                    var ingestion = scope.ServiceProvider.GetRequiredService<RatesIngestionService>();
+
+                    await ingestion.IngestTodayAsync(expectedDate, stoppingToken);
                 }
                 catch (Exception ex)
                 {

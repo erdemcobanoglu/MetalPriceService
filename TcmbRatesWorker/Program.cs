@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Serilog;
 using TcmbRatesWorker.Application.Abstractions;
+using TcmbRatesWorker.Application.Services;
 using TcmbRatesWorker.Infrastructure.Http;
 using TcmbRatesWorker.Infrastructure.Persistence;
 using TcmbRatesWorker.Shared.Options;
@@ -25,6 +26,10 @@ builder.Services.AddDbContext<RatesDbContext>(options =>
         sql => sql.MigrationsHistoryTable("__EFMigrationsHistory_TcmbRates", "tcmb")));
 
 builder.Services.AddHttpClient<ITcmbRatesClient, TcmbRatesClient>();
+
+builder.Services.AddScoped<RatesIngestionService>();
+builder.Services.AddScoped<IRatesRepository, RatesRepository>();
+
 builder.Services.AddHostedService<Worker>();
 
 try
