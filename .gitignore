@@ -424,3 +424,4 @@ appsettings.*.json
 /CarSalesPlatform/Presentation/appsettings.Development.json
 /CarSalesPlatform/Presentation/TextFile.txt
 /TcmbRatesWorker/Logs/Packages.txt
+/ReadME.txt
