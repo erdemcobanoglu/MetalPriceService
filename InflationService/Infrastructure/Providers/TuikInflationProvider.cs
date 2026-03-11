@@ -8,8 +8,6 @@ namespace InflationService.Infrastructure.Providers
 {
     public sealed class TuikInflationProvider : IInflationProvider
     {
-        private const string SourceUrl = "https://data.tuik.gov.tr/Bulten/Index?p=Tuketici-Fiyat-Endeksi";
-
         private readonly TuikHttpClient _httpClient;
         private readonly TuikInflationParser _parser;
         private readonly ILogger<TuikInflationProvider> _logger;
@@ -30,31 +28,40 @@ namespace InflationService.Infrastructure.Providers
         {
             _logger.LogInformation("Fetching latest TÜİK inflation data.");
 
-            var content = await _httpClient.GetLatestInflationContentAsync(ct);
+            var candidateUrls = _httpClient.GetCandidateUrls();
 
-            if (string.IsNullOrWhiteSpace(content))
+            foreach (var url in candidateUrls)
             {
-                _logger.LogWarning("TÜİK response content is empty.");
-                return null;
+                var content = await _httpClient.GetContentAsync(url, ct);
+
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    _logger.LogWarning("TÜİK response content is empty for {Url}", url);
+                    continue;
+                }
+
+                var point = _parser.Parse(content, url);
+
+                if (point is null)
+                {
+                    _logger.LogWarning("TÜİK content could not be parsed from {Url}", url);
+                    continue;
+                }
+
+                _logger.LogInformation(
+                    "TÜİK data parsed successfully. Period={Year}-{Month:00}, Monthly={MonthlyRate}, Annual={AnnualRate}, Index={IndexValue}, Url={Url}",
+                    point.Year,
+                    point.Month,
+                    point.MonthlyRate,
+                    point.AnnualRate,
+                    point.IndexValue,
+                    url);
+
+                return point;
             }
 
-            var point = _parser.Parse(content, SourceUrl);
-
-            if (point is null)
-            {
-                _logger.LogWarning("TÜİK content could not be parsed.");
-                return null;
-            }
-
-            _logger.LogInformation(
-                "TÜİK data parsed successfully. Period={Year}-{Month:00}, Monthly={MonthlyRate}, Annual={AnnualRate}, Index={IndexValue}",
-                point.Year,
-                point.Month,
-                point.MonthlyRate,
-                point.AnnualRate,
-                point.IndexValue);
-
-            return point;
+            _logger.LogWarning("No parseable TÜİK inflation data found from any candidate URL.");
+            return null;
         }
 
         public Task<InflationPoint?> GetByPeriodAsync(int year, int month, CancellationToken ct)
