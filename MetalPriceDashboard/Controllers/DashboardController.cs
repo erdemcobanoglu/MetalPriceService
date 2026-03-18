@@ -70,10 +70,16 @@ public sealed class DashboardController : Controller
         return View(model);
     }
 
-    public async Task<IActionResult> Rates(
-        [FromQuery] RatesDashboardFilter filter,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> Rates([FromQuery] RatesDashboardFilter filter, CancellationToken cancellationToken)
     {
+        var currencyCodes = await _dbContext.RatePeriodSummaries
+            .AsNoTracking()
+            .Where(x => !string.IsNullOrWhiteSpace(x.CurrencyCode))
+            .Select(x => x.CurrencyCode)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToListAsync(cancellationToken);
+
         IQueryable<RatePeriodSummary> query = _dbContext.RatePeriodSummaries.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(filter.CurrencyCode))
@@ -96,7 +102,8 @@ public sealed class DashboardController : Controller
         var model = new RatesDashboardPageViewModel
         {
             Filter = filter,
-            Items = items
+            Items = items,
+            CurrencyCodes = currencyCodes
         };
 
         return View(model);

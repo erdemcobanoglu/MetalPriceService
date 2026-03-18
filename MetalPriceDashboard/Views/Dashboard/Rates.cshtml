@@ -1,7 +1,33 @@
 ﻿@model RatesDashboardPageViewModel
 @{
     ViewData["Title"] = "TCMB Rates Dashboard";
+
+    var currencyCodes = Model.CurrencyCodes != null && Model.CurrencyCodes.Any()
+        ? Model.CurrencyCodes
+        : Model.Items
+            .Select(x => x.CurrencyCode)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct()
+            .OrderBy(x => x)
+            .ToList();
 }
+
+<style>
+    .table-scroll-top {
+        overflow-x: auto;
+        overflow-y: hidden;
+        height: 18px;
+        margin-bottom: 8px;
+    }
+
+    .table-scroll-top-inner {
+        height: 1px;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+</style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="mb-0">TCMB Rates Dashboard</h1>
@@ -13,16 +39,52 @@
         <form method="get" class="row g-3">
             <div class="col-md-4">
                 <label class="form-label">Currency Code</label>
-                <input type="text" name="CurrencyCode" value="@Model.Filter.CurrencyCode" class="form-control" placeholder="USD" />
+                <select name="CurrencyCode" class="form-select">
+                    <option value="">All</option>
+                    @foreach (var code in currencyCodes)
+                    {
+                        if (Model.Filter.CurrencyCode == code)
+                        {
+                            <option value="@code" selected>@code</option>
+                        }
+                        else
+                        {
+                            <option value="@code">@code</option>
+                        }
+                    }
+                </select>
             </div>
 
             <div class="col-md-4">
                 <label class="form-label">Period Type</label>
                 <select name="PeriodType" class="form-select">
                     <option value="">All</option>
-                    <option value="WEEK" selected="@(Model.Filter.PeriodType == "WEEK")">WEEK</option>
-                    <option value="MONTH" selected="@(Model.Filter.PeriodType == "MONTH")">MONTH</option>
-                    <option value="YEAR" selected="@(Model.Filter.PeriodType == "YEAR")">YEAR</option>
+                    @if (Model.Filter.PeriodType == "WEEK")
+                    {
+                        <option value="WEEK" selected>WEEK</option>
+                    }
+                    else
+                    {
+                        <option value="WEEK">WEEK</option>
+                    }
+
+                    @if (Model.Filter.PeriodType == "MONTH")
+                    {
+                        <option value="MONTH" selected>MONTH</option>
+                    }
+                    else
+                    {
+                        <option value="MONTH">MONTH</option>
+                    }
+
+                    @if (Model.Filter.PeriodType == "YEAR")
+                    {
+                        <option value="YEAR" selected>YEAR</option>
+                    }
+                    else
+                    {
+                        <option value="YEAR">YEAR</option>
+                    }
                 </select>
             </div>
 
@@ -79,8 +141,12 @@
 
 <div class="card shadow-sm">
     <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-hover table-bordered align-middle mb-0">
+        <div id="topScrollbar" class="table-scroll-top">
+            <div id="topScrollbarInner" class="table-scroll-top-inner"></div>
+        </div>
+
+        <div id="tableContainer" class="table-responsive">
+            <table id="ratesTable" class="table table-hover table-bordered align-middle mb-0">
                 <thead class="table-light">
                     <tr>
                         <th>CurrencyCode</th>
@@ -124,3 +190,51 @@
         </div>
     </div>
 </div>
+
+<script>
+    (function () {
+        const topScrollbar = document.getElementById('topScrollbar');
+        const topScrollbarInner = document.getElementById('topScrollbarInner');
+        const tableContainer = document.getElementById('tableContainer');
+        const ratesTable = document.getElementById('ratesTable');
+
+        let syncingFromTop = false;
+        let syncingFromBottom = false;
+
+        function updateTopScrollbarWidth() {
+            if (!ratesTable || !topScrollbarInner || !tableContainer) return;
+
+            topScrollbarInner.style.width = ratesTable.scrollWidth + 'px';
+
+            const needsScroll = ratesTable.scrollWidth > tableContainer.clientWidth;
+            topScrollbar.style.display = needsScroll ? 'block' : 'none';
+        }
+
+        if (topScrollbar && tableContainer) {
+            topScrollbar.addEventListener('scroll', function () {
+                if (syncingFromBottom) {
+                    syncingFromBottom = false;
+                    return;
+                }
+
+                syncingFromTop = true;
+                tableContainer.scrollLeft = topScrollbar.scrollLeft;
+            });
+
+            tableContainer.addEventListener('scroll', function () {
+                if (syncingFromTop) {
+                    syncingFromTop = false;
+                    return;
+                }
+
+                syncingFromBottom = true;
+                topScrollbar.scrollLeft = tableContainer.scrollLeft;
+            });
+        }
+
+        window.addEventListener('load', updateTopScrollbarWidth);
+        window.addEventListener('resize', updateTopScrollbarWidth);
+
+        setTimeout(updateTopScrollbarWidth, 100);
+    })();
+</script>
