@@ -1,7 +1,35 @@
 ﻿@model MetalDashboardPageViewModel
 @{
     ViewData["Title"] = "Metal Dashboard";
+
+    var baseCurrencies = Model.BaseCurrencies != null && Model.BaseCurrencies.Any()
+        ? Model.BaseCurrencies
+        : Model.Items
+            .Select(x => x.BaseCurrency)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct()
+            .OrderBy(x => x)
+            .ToList();
+
+    string FormatNumber(decimal value) => value.ToString("N4");
 }
+
+<style>
+    .table-scroll-top {
+        overflow-x: auto;
+        overflow-y: hidden;
+        height: 18px;
+        margin-bottom: 8px;
+    }
+
+    .table-scroll-top-inner {
+        height: 1px;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+</style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="mb-0">Metal Dashboard</h1>
@@ -13,17 +41,62 @@
         <form method="get" class="row g-3">
             <div class="col-md-3">
                 <label class="form-label">Base Currency</label>
-                <input type="text" name="BaseCurrency" value="@Model.Filter.BaseCurrency" class="form-control" placeholder="USD" />
+                <select name="BaseCurrency" class="form-select">
+                    <option value="">All</option>
+                    @foreach (var currency in baseCurrencies)
+                    {
+                        if (Model.Filter.BaseCurrency == currency)
+                        {
+                            <option value="@currency" selected>@currency</option>
+                        }
+                        else
+                        {
+                            <option value="@currency">@currency</option>
+                        }
+                    }
+                </select>
             </div>
 
             <div class="col-md-3">
                 <label class="form-label">Metal</label>
                 <select name="Metal" class="form-select">
                     <option value="">All</option>
-                    <option value="XAU" selected="@(Model.Filter.Metal == "XAU")">XAU</option>
-                    <option value="XAG" selected="@(Model.Filter.Metal == "XAG")">XAG</option>
-                    <option value="XPT" selected="@(Model.Filter.Metal == "XPT")">XPT</option>
-                    <option value="XPD" selected="@(Model.Filter.Metal == "XPD")">XPD</option>
+
+                    @if (Model.Filter.Metal == "XAU")
+                    {
+                        <option value="XAU" selected>XAU</option>
+                    }
+                    else
+                    {
+                        <option value="XAU">XAU</option>
+                    }
+
+                    @if (Model.Filter.Metal == "XAG")
+                    {
+                        <option value="XAG" selected>XAG</option>
+                    }
+                    else
+                    {
+                        <option value="XAG">XAG</option>
+                    }
+
+                    @if (Model.Filter.Metal == "XPT")
+                    {
+                        <option value="XPT" selected>XPT</option>
+                    }
+                    else
+                    {
+                        <option value="XPT">XPT</option>
+                    }
+
+                    @if (Model.Filter.Metal == "XPD")
+                    {
+                        <option value="XPD" selected>XPD</option>
+                    }
+                    else
+                    {
+                        <option value="XPD">XPD</option>
+                    }
                 </select>
             </div>
 
@@ -31,9 +104,33 @@
                 <label class="form-label">Period Type</label>
                 <select name="PeriodType" class="form-select">
                     <option value="">All</option>
-                    <option value="WEEK" selected="@(Model.Filter.PeriodType == "WEEK")">WEEK</option>
-                    <option value="MONTH" selected="@(Model.Filter.PeriodType == "MONTH")">MONTH</option>
-                    <option value="YEAR" selected="@(Model.Filter.PeriodType == "YEAR")">YEAR</option>
+
+                    @if (Model.Filter.PeriodType == "WEEK")
+                    {
+                        <option value="WEEK" selected>WEEK</option>
+                    }
+                    else
+                    {
+                        <option value="WEEK">WEEK</option>
+                    }
+
+                    @if (Model.Filter.PeriodType == "MONTH")
+                    {
+                        <option value="MONTH" selected>MONTH</option>
+                    }
+                    else
+                    {
+                        <option value="MONTH">MONTH</option>
+                    }
+
+                    @if (Model.Filter.PeriodType == "YEAR")
+                    {
+                        <option value="YEAR" selected>YEAR</option>
+                    }
+                    else
+                    {
+                        <option value="YEAR">YEAR</option>
+                    }
                 </select>
             </div>
 
@@ -52,30 +149,50 @@
         .ThenByDescending(x => x.PeriodTypeSort)
         .First();
 
+    var selectedYear = latest.PeriodStartDate.Year;
+
+    var yearlyItems = Model.Items
+        .Where(x => x.PeriodStartDate.Year == selectedYear)
+        .ToList();
+
+    var yearMin = yearlyItems.Min(x => x.MinPrice);
+    var yearMax = yearlyItems.Max(x => x.MaxPrice);
+    var yearAvg = yearlyItems.Average(x => (x.MinPrice + x.MaxPrice) / 2m);
+
     <div class="row g-3 mb-4">
-        <div class="col-md-4">
-            <div class="card shadow-sm card-summary">
+        <div class="col-md-3">
+            <div class="card shadow-sm card-summary h-100">
                 <div class="card-body">
-                    <div class="text-muted">Latest Period</div>
-                    <div class="fs-4 fw-bold">@latest.PeriodLabel</div>
+                    <div class="text-muted">Summary Year</div>
+                    <div class="fs-4 fw-bold">@selectedYear</div>
+                    <div class="small text-muted mt-2">Latest Period: @latest.PeriodLabel</div>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-4">
-            <div class="card shadow-sm card-summary">
+        <div class="col-md-3">
+            <div class="card shadow-sm card-summary h-100">
                 <div class="card-body">
-                    <div class="text-muted">Min Price</div>
-                    <div class="fs-4 fw-bold">@latest.MinPrice</div>
+                    <div class="text-muted">Yearly Min Price</div>
+                    <div class="fs-4 fw-bold">@FormatNumber(yearMin)</div>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-4">
-            <div class="card shadow-sm card-summary">
+        <div class="col-md-3">
+            <div class="card shadow-sm card-summary h-100">
                 <div class="card-body">
-                    <div class="text-muted">Max Price</div>
-                    <div class="fs-4 fw-bold">@latest.MaxPrice</div>
+                    <div class="text-muted">Yearly Max Price</div>
+                    <div class="fs-4 fw-bold">@FormatNumber(yearMax)</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm card-summary h-100">
+                <div class="card-body">
+                    <div class="text-muted">Yearly Avg Price</div>
+                    <div class="fs-4 fw-bold">@FormatNumber(yearAvg)</div>
                 </div>
             </div>
         </div>
@@ -84,8 +201,12 @@
 
 <div class="card shadow-sm">
     <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-hover table-bordered align-middle mb-0">
+        <div id="topScrollbar" class="table-scroll-top">
+            <div id="topScrollbarInner" class="table-scroll-top-inner"></div>
+        </div>
+
+        <div id="tableContainer" class="table-responsive">
+            <table id="metalTable" class="table table-hover table-bordered align-middle mb-0">
                 <thead class="table-light">
                     <tr>
                         <th>BaseCurrency</th>
@@ -108,8 +229,8 @@
                             <td>@item.PeriodLabel</td>
                             <td>@item.PeriodStartDate.ToString("yyyy-MM-dd")</td>
                             <td>@item.PeriodEndDate.ToString("yyyy-MM-dd")</td>
-                            <td>@item.MinPrice</td>
-                            <td>@item.MaxPrice</td>
+                            <td>@FormatNumber(item.MinPrice)</td>
+                            <td>@FormatNumber(item.MaxPrice)</td>
                         </tr>
                     }
                 </tbody>
@@ -117,3 +238,51 @@
         </div>
     </div>
 </div>
+
+<script>
+    (function () {
+        const topScrollbar = document.getElementById('topScrollbar');
+        const topScrollbarInner = document.getElementById('topScrollbarInner');
+        const tableContainer = document.getElementById('tableContainer');
+        const metalTable = document.getElementById('metalTable');
+
+        let syncingFromTop = false;
+        let syncingFromBottom = false;
+
+        function updateTopScrollbarWidth() {
+            if (!metalTable || !topScrollbarInner || !tableContainer) return;
+
+            topScrollbarInner.style.width = metalTable.scrollWidth + 'px';
+
+            const needsScroll = metalTable.scrollWidth > tableContainer.clientWidth;
+            topScrollbar.style.display = needsScroll ? 'block' : 'none';
+        }
+
+        if (topScrollbar && tableContainer) {
+            topScrollbar.addEventListener('scroll', function () {
+                if (syncingFromBottom) {
+                    syncingFromBottom = false;
+                    return;
+                }
+
+                syncingFromTop = true;
+                tableContainer.scrollLeft = topScrollbar.scrollLeft;
+            });
+
+            tableContainer.addEventListener('scroll', function () {
+                if (syncingFromTop) {
+                    syncingFromTop = false;
+                    return;
+                }
+
+                syncingFromBottom = true;
+                topScrollbar.scrollLeft = tableContainer.scrollLeft;
+            });
+        }
+
+        window.addEventListener('load', updateTopScrollbarWidth);
+        window.addEventListener('resize', updateTopScrollbarWidth);
+
+        setTimeout(updateTopScrollbarWidth, 100);
+    })();
+</script>

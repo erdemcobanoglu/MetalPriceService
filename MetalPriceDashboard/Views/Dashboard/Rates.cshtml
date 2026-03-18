@@ -103,36 +103,64 @@
         .ThenByDescending(x => x.PeriodTypeSort)
         .First();
 
+    var selectedYear = latest.PeriodStartDate.Year;
+
+    var yearlyItems = Model.Items
+        .Where(x => x.PeriodStartDate.Year == selectedYear)
+        .ToList();
+
+    var forexBuyingYearMin = yearlyItems.Min(x => x.ForexBuyingMin);
+    var forexBuyingYearMax = yearlyItems.Max(x => x.ForexBuyingMax);
+    var forexBuyingYearAvg = yearlyItems.Average(x => (x.ForexBuyingMin + x.ForexBuyingMax) / 2m);
+
+    var forexSellingYearMin = yearlyItems.Min(x => x.ForexSellingMin);
+    var forexSellingYearMax = yearlyItems.Max(x => x.ForexSellingMax);
+    var forexSellingYearAvg = yearlyItems.Average(x => (x.ForexSellingMin + x.ForexSellingMax) / 2m);
+
+    var banknoteSellingYearMin = yearlyItems.Min(x => x.BanknoteSellingMin);
+    var banknoteSellingYearMax = yearlyItems.Max(x => x.BanknoteSellingMax);
+    var banknoteSellingYearAvg = yearlyItems.Average(x => (x.BanknoteSellingMin + x.BanknoteSellingMax) / 2m);
+
     <div class="row g-3 mb-4">
         <div class="col-md-3">
-            <div class="card shadow-sm card-summary">
+            <div class="card shadow-sm card-summary h-100">
                 <div class="card-body">
-                    <div class="text-muted">Latest Period</div>
-                    <div class="fs-5 fw-bold">@latest.PeriodLabel</div>
+                    <div class="text-muted">Summary Year</div>
+                    <div class="fs-5 fw-bold">@selectedYear</div>
+                    <div class="small text-muted mt-2">Latest Period: @latest.PeriodLabel</div>
                 </div>
             </div>
         </div>
+
         <div class="col-md-3">
-            <div class="card shadow-sm card-summary">
+            <div class="card shadow-sm card-summary h-100">
                 <div class="card-body">
                     <div class="text-muted">Forex Buying</div>
-                    <div class="fw-bold">@latest.ForexBuyingMin - @latest.ForexBuyingMax</div>
+                    <div class="small mt-2">Min: <span class="fw-bold">@forexBuyingYearMin?.ToString("N4")</span></div>
+                    <div class="small">Max: <span class="fw-bold">@forexBuyingYearMax?.ToString("N4")</span></div>
+                    <div class="small">Avg: <span class="fw-bold">@forexBuyingYearAvg?.ToString("N4")</span></div>
                 </div>
             </div>
         </div>
+
         <div class="col-md-3">
-            <div class="card shadow-sm card-summary">
+            <div class="card shadow-sm card-summary h-100">
                 <div class="card-body">
                     <div class="text-muted">Forex Selling</div>
-                    <div class="fw-bold">@latest.ForexSellingMin - @latest.ForexSellingMax</div>
+                    <div class="small mt-2">Min: <span class="fw-bold">@forexSellingYearMin?.ToString("N4")</span></div>
+                    <div class="small">Max: <span class="fw-bold">@forexSellingYearMax?.ToString("N4")</span></div>
+                    <div class="small">Avg: <span class="fw-bold">@forexSellingYearAvg?.ToString("N4")</span></div>
                 </div>
             </div>
         </div>
+
         <div class="col-md-3">
-            <div class="card shadow-sm card-summary">
+            <div class="card shadow-sm card-summary h-100">
                 <div class="card-body">
                     <div class="text-muted">Banknote Selling</div>
-                    <div class="fw-bold">@latest.BanknoteSellingMin - @latest.BanknoteSellingMax</div>
+                    <div class="small mt-2">Min: <span class="fw-bold">@banknoteSellingYearMin?.ToString("N4")</span></div>
+                    <div class="small">Max: <span class="fw-bold">@banknoteSellingYearMax?.ToString("N4")</span></div>
+                    <div class="small">Avg: <span class="fw-bold">@banknoteSellingYearAvg?.ToString("N4")</span></div>
                 </div>
             </div>
         </div>
@@ -155,14 +183,16 @@
                         <th>PeriodLabel</th>
                         <th>Start</th>
                         <th>End</th>
-                        <th>ForexBuyingMin</th>
-                        <th>ForexBuyingMax</th>
-                        <th>ForexSellingMin</th>
-                        <th>ForexSellingMax</th>
+                       
                         <th>BanknoteBuyingMin</th>
                         <th>BanknoteBuyingMax</th>
                         <th>BanknoteSellingMin</th>
                         <th>BanknoteSellingMax</th>
+
+                        <th>ForexBuyingMin</th>
+                        <th>ForexBuyingMax</th>
+                        <th>ForexSellingMin</th>
+                        <th>ForexSellingMax</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -175,14 +205,16 @@
                             <td>@item.PeriodLabel</td>
                             <td>@item.PeriodStartDate.ToString("yyyy-MM-dd")</td>
                             <td>@item.PeriodEndDate.ToString("yyyy-MM-dd")</td>
-                            <td>@item.ForexBuyingMin</td>
-                            <td>@item.ForexBuyingMax</td>
-                            <td>@item.ForexSellingMin</td>
-                            <td>@item.ForexSellingMax</td>
+                           
                             <td>@item.BanknoteBuyingMin</td>
                             <td>@item.BanknoteBuyingMax</td>
                             <td>@item.BanknoteSellingMin</td>
                             <td>@item.BanknoteSellingMax</td>
+
+                            <td>@item.ForexBuyingMin</td>
+                            <td>@item.ForexBuyingMax</td>
+                            <td>@item.ForexSellingMin</td>
+                            <td>@item.ForexSellingMax</td>
                         </tr>
                     }
                 </tbody>
