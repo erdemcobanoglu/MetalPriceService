@@ -10,6 +10,8 @@
             .Distinct()
             .OrderBy(x => x)
             .ToList();
+
+    string FormatNumber(decimal value) => value.ToString("N4");
 }
 
 <style>
@@ -26,6 +28,24 @@
 
     .table-responsive {
         overflow-x: auto;
+    }
+
+    .currency-group-header td {
+        border-top: 3px solid #000 !important;
+        border-bottom: 3px solid #000 !important;
+        border-left: none !important;
+        border-right: none !important;
+        background-color: #f8f9fa !important;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        padding: 10px 12px;
+        font-size: 13px;
+        color: #333;
+    }
+
+    .currency-separator td {
+        border-top: 3px solid #000 !important;
     }
 </style>
 
@@ -136,9 +156,9 @@
             <div class="card shadow-sm card-summary h-100">
                 <div class="card-body">
                     <div class="text-muted">Forex Buying</div>
-                    <div class="small mt-2">Min: <span class="fw-bold">@forexBuyingYearMin?.ToString("N4")</span></div>
-                    <div class="small">Max: <span class="fw-bold">@forexBuyingYearMax?.ToString("N4")</span></div>
-                    <div class="small">Avg: <span class="fw-bold">@forexBuyingYearAvg?.ToString("N4")</span></div>
+                    <div class="small mt-2">Min: <span class="fw-bold">@forexBuyingYearMin</span></div>
+                    <div class="small">Max: <span class="fw-bold">@forexBuyingYearMax</span></div>
+                    <div class="small">Avg: <span class="fw-bold">@forexBuyingYearAvg</span></div>
                 </div>
             </div>
         </div>
@@ -147,9 +167,9 @@
             <div class="card shadow-sm card-summary h-100">
                 <div class="card-body">
                     <div class="text-muted">Forex Selling</div>
-                    <div class="small mt-2">Min: <span class="fw-bold">@forexSellingYearMin?.ToString("N4")</span></div>
-                    <div class="small">Max: <span class="fw-bold">@forexSellingYearMax?.ToString("N4")</span></div>
-                    <div class="small">Avg: <span class="fw-bold">@forexSellingYearAvg?.ToString("N4")</span></div>
+                    <div class="small mt-2">Min: <span class="fw-bold">@forexSellingYearMin</span></div>
+                    <div class="small">Max: <span class="fw-bold">@forexSellingYearMax</span></div>
+                    <div class="small">Avg: <span class="fw-bold">@forexSellingYearAvg</span></div>
                 </div>
             </div>
         </div>
@@ -158,9 +178,9 @@
             <div class="card shadow-sm card-summary h-100">
                 <div class="card-body">
                     <div class="text-muted">Banknote Selling</div>
-                    <div class="small mt-2">Min: <span class="fw-bold">@banknoteSellingYearMin?.ToString("N4")</span></div>
-                    <div class="small">Max: <span class="fw-bold">@banknoteSellingYearMax?.ToString("N4")</span></div>
-                    <div class="small">Avg: <span class="fw-bold">@banknoteSellingYearAvg?.ToString("N4")</span></div>
+                    <div class="small mt-2">Min: <span class="fw-bold">@banknoteSellingYearMin</span></div>
+                    <div class="small">Max: <span class="fw-bold">@banknoteSellingYearMax</span></div>
+                    <div class="small">Avg: <span class="fw-bold">@banknoteSellingYearAvg</span></div>
                 </div>
             </div>
         </div>
@@ -183,12 +203,10 @@
                         <th>PeriodLabel</th>
                         <th>Start</th>
                         <th>End</th>
-                       
                         <th>BanknoteBuyingMin</th>
                         <th>BanknoteBuyingMax</th>
                         <th>BanknoteSellingMin</th>
                         <th>BanknoteSellingMax</th>
-
                         <th>ForexBuyingMin</th>
                         <th>ForexBuyingMax</th>
                         <th>ForexSellingMin</th>
@@ -196,26 +214,43 @@
                     </tr>
                 </thead>
                 <tbody>
+                    @{
+                        string? previousCurrencyCode = null;
+                    }
+
                     @foreach (var item in Model.Items)
                     {
-                        <tr>
+                        var isFirstGroup = previousCurrencyCode == null;
+                        var isNewCurrencyGroup = previousCurrencyCode != null
+                        && !string.Equals(previousCurrencyCode, item.CurrencyCode, StringComparison.OrdinalIgnoreCase);
+
+                        if (isFirstGroup || isNewCurrencyGroup)
+                        {
+                            <tr class="currency-group-header">
+                                <td colspan="14">
+                                    Currency Group: @item.CurrencyCode
+                                </td>
+                            </tr>
+                        }
+
+                        <tr class="@(isNewCurrencyGroup ? "currency-separator" : "")">
                             <td>@item.CurrencyCode</td>
                             <td>@item.Unit</td>
                             <td>@item.PeriodType</td>
                             <td>@item.PeriodLabel</td>
                             <td>@item.PeriodStartDate.ToString("yyyy-MM-dd")</td>
                             <td>@item.PeriodEndDate.ToString("yyyy-MM-dd")</td>
-                           
                             <td>@item.BanknoteBuyingMin</td>
                             <td>@item.BanknoteBuyingMax</td>
                             <td>@item.BanknoteSellingMin</td>
                             <td>@item.BanknoteSellingMax</td>
-
                             <td>@item.ForexBuyingMin</td>
                             <td>@item.ForexBuyingMax</td>
                             <td>@item.ForexSellingMin</td>
                             <td>@item.ForexSellingMax</td>
                         </tr>
+
+                        previousCurrencyCode = item.CurrencyCode;
                     }
                 </tbody>
             </table>

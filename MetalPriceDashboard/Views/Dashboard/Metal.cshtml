@@ -29,6 +29,24 @@
     .table-responsive {
         overflow-x: auto;
     }
+
+    .metal-group-header td {
+        border-top: 3px solid #000 !important;
+        border-bottom: 3px solid #000 !important;
+        border-left: none !important;
+        border-right: none !important;
+        background-color: #f8f9fa !important;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        padding: 10px 12px;
+        font-size: 13px;
+        color: #333;
+    }
+
+    .metal-separator td {
+        border-top: 3px solid #000 !important;
+    }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -220,9 +238,25 @@
                     </tr>
                 </thead>
                 <tbody>
+                    @{
+                        string? previousMetal = null;
+                    }
+
                     @foreach (var item in Model.Items)
                     {
-                        <tr>
+                        var isFirstGroup = previousMetal == null;
+                        var isNewMetalGroup = previousMetal != null && !string.Equals(previousMetal, item.Metal, StringComparison.OrdinalIgnoreCase);
+
+                        if (isFirstGroup || isNewMetalGroup)
+                        {
+                            <tr class="metal-group-header">
+                                <td colspan="8">
+                                    Metal Group: @item.Metal
+                                </td>
+                            </tr>
+                        }
+
+                        <tr class="@(isNewMetalGroup ? "metal-separator" : "")">
                             <td>@item.BaseCurrency</td>
                             <td>@item.Metal</td>
                             <td>@item.PeriodType</td>
@@ -232,6 +266,8 @@
                             <td>@FormatNumber(item.MinPrice)</td>
                             <td>@FormatNumber(item.MaxPrice)</td>
                         </tr>
+
+                        previousMetal = item.Metal;
                     }
                 </tbody>
             </table>
