@@ -96,7 +96,7 @@ namespace MetalPrice.Service.Services
             var http = _httpClientFactory.CreateClient("metals");
 
             var url =
-                $"https://metals-api.com/api/latest?access_key={Uri.EscapeDataString(opt.ApiKey)}&base=USD&symbols=USD,XAU,XAG,XPT,XPD,USDXAU,USDXAG,USDXPT,USDXPD";
+                $"https://metals-api.com/api/latest?access_key={Uri.EscapeDataString(opt.ApiKey)}&base=USD&symbols=USD,XAU,XAG,XPT,XPD";
 
             var resp = await http.GetFromJsonAsync<MetalsApiLatestResponse>(url, ct)
                        ?? throw new InvalidOperationException("Empty response.");
@@ -151,20 +151,25 @@ namespace MetalPrice.Service.Services
 
             var morningValue = slot.Equals("morning", StringComparison.OrdinalIgnoreCase)
                 ? "morning"
-                : null;
+                : "-";
 
             var eveningValue = slot.Equals("evening", StringComparison.OrdinalIgnoreCase)
                 ? "evening"
-                : null;
+                : "-";
 
-            var updated = await db.ServiceSchedules
-                .Where(x => x.Id == 1)
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(x => x.UpdatedAtUtc, nowUtc)
-                    .SetProperty(x => x.MorningTime, morningValue)
-                    .SetProperty(x => x.EveningTime, eveningValue), ct);
+            var entity = await db.ServiceSchedules
+                .OrderBy(x => x.Id)
+                .FirstOrDefaultAsync(ct);
 
-            if (updated > 0) return;
+            if (entity != null)
+            {
+                entity.UpdatedAtUtc = nowUtc;
+                entity.MorningTime = morningValue;
+                entity.EveningTime = eveningValue;
+
+                await db.SaveChangesAsync(ct);
+                return;
+            }
 
             db.ServiceSchedules.Add(new ServiceSchedule
             {
