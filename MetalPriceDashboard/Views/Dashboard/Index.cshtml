@@ -1,0 +1,28 @@
+﻿@model DashboardIndexViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="card shadow-sm card-summary">
+            <div class="card-body">
+                <h3 class="card-title">Metal Summary</h3>
+                <p class="text-muted">Metal dönemsel özet kayıtları</p>
+                <h2>@Model.MetalRecordCount</h2>
+                <a asp-controller="Dashboard" asp-action="Metal" class="btn btn-primary mt-2">Open Metal Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card shadow-sm card-summary">
+            <div class="card-body">
+                <h3 class="card-title">TCMB Rates Summary</h3>
+                <p class="text-muted">TCMB dönemsel kur özet kayıtları</p>
+                <h2>@Model.RateRecordCount</h2>
+                <a asp-controller="Dashboard" asp-action="Rates" class="btn btn-primary mt-2">Open Rates Dashboard</a>
+            </div>
+        </div>
+    </div>
+</div>

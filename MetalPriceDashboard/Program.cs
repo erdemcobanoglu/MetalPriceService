@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Serilog;
-using MetalPriceDashboard.Data;
+using MetalPriceDashboard.Data; 
+
 
 var builder = WebApplication.CreateBuilder(args);
 
