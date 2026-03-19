@@ -165,14 +165,13 @@ public sealed class DashboardController : Controller
         }
 
         var selectedCurrencies = !string.IsNullOrWhiteSpace(filter.CurrencyCode)
-            ? [filter.CurrencyCode]
-            : items
-                .Select(x => x.CurrencyCode)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(x => x)
-                .Take(6) // çok kalabalık olmasın diye
-                .ToList();
+             ? new List<string> { filter.CurrencyCode! }
+    :        items
+            .Select(x => x.CurrencyCode)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+            .ToList();
 
         var cards = new List<RateCardViewModel>();
 
