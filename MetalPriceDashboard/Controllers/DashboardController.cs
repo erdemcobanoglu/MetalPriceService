@@ -26,7 +26,11 @@ public sealed class DashboardController : Controller
 
             RateRecordCount = await _dbContext.RatePeriodSummaries
                 .AsNoTracking()
-                .CountAsync(cancellationToken)
+                .CountAsync(cancellationToken),
+
+            RatioRecordCount = await _dbContext.MetalPriceRatios
+                .AsNoTracking()
+                .CountAsync(cancellationToken),
         };
 
         return View(model);
@@ -104,6 +108,22 @@ public sealed class DashboardController : Controller
             Filter = filter,
             Items = items,
             CurrencyCodes = currencyCodes
+        };
+
+        return View(model);
+    }
+
+    public async Task<IActionResult> Ratios(CancellationToken cancellationToken)
+    {
+        var latest = await _dbContext.MetalPriceRatios
+            .AsNoTracking()
+            .OrderByDescending(x => x.SnapshotTime)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var model = new RatiosDashboardViewModel
+        {
+            Latest = latest
         };
 
         return View(model);

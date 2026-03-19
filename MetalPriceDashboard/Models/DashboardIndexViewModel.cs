@@ -4,5 +4,6 @@
     {
         public int MetalRecordCount { get; set; }
         public int RateRecordCount { get; set; }
+        public int RatioRecordCount { get; set; }
     }
 }
