@@ -1,0 +1,79 @@
+﻿@model RatiosDashboardViewModel
+
+@{
+    ViewData["Title"] = "Metal Ratios Dashboard";
+}
+
+<div class="container mt-4">
+
+    <h2 class="mb-3">Metal Ratios Dashboard</h2>
+
+    @if (Model.Latest == null)
+    {
+        <div class="alert alert-warning">
+            Veri bulunamadı.
+        </div>
+    }
+    else
+    {
+        <div class="card mb-3 shadow-sm">
+            <div class="card-body">
+                <strong>Snapshot:</strong> @Model.Latest.SnapshotTime
+                <br />
+                <strong>Created:</strong> @Model.Latest.CreatedAt
+            </div>
+        </div>
+
+        <div class="row">
+
+            <!-- XAU -->
+            <div class="col-md-3">
+                <div class="card border-primary mb-3">
+                    <div class="card-body">
+                        <h5>XAU</h5>
+                        <div>XAU/XAG: @Model.Latest.XAU_XAG</div>
+                        <div>XAU/XPT: @Model.Latest.XAU_XPT</div>
+                        <div>XAU/XPD: @Model.Latest.XAU_XPD</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- XAG -->
+            <div class="col-md-3">
+                <div class="card border-success mb-3">
+                    <div class="card-body">
+                        <h5>XAG</h5>
+                        <div>XAG/XAU: @Model.Latest.XAG_XAU</div>
+                        <div>XAG/XPT: @Model.Latest.XAG_XPT</div>
+                        <div>XAG/XPD: @Model.Latest.XAG_XPD</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- XPT -->
+            <div class="col-md-3">
+                <div class="card border-warning mb-3">
+                    <div class="card-body">
+                        <h5>XPT</h5>
+                        <div>XPT/XAU: @Model.Latest.XPT_XAU</div>
+                        <div>XPT/XAG: @Model.Latest.XPT_XAG</div>
+                        <div>XPT/XPD: @Model.Latest.XPT_XPD</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- XPD -->
+            <div class="col-md-3">
+                <div class="card border-danger mb-3">
+                    <div class="card-body">
+                        <h5>XPD</h5>
+                        <div>XPD/XAU: @Model.Latest.XPD_XAU</div>
+                        <div>XPD/XAG: @Model.Latest.XPD_XAG</div>
+                        <div>XPD/XPT: @Model.Latest.XPD_XPT</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    }
+</div>

@@ -111,9 +111,188 @@ public sealed class DashboardController : Controller
         };
 
         return View(model);
-    }
+    } 
 
     public async Task<IActionResult> Ratios(CancellationToken cancellationToken)
+    {
+        var snapshots = await _dbContext.MetalPriceRatios
+            .AsNoTracking()
+            .OrderByDescending(x => x.SnapshotTime)
+            .ThenByDescending(x => x.Id)
+            .Take(20)
+            .ToListAsync(cancellationToken);
+
+        var latest = snapshots.FirstOrDefault();
+
+        var model = new RatiosDashboardPageViewModel
+        {
+            SnapshotTime = latest?.SnapshotTime,
+            CreatedAt = latest?.CreatedAt
+        };
+
+        if (latest is null)
+        {
+            return View(model);
+        }
+
+        var orderedHistory = snapshots
+            .OrderBy(x => x.SnapshotTime)
+            .ThenBy(x => x.Id)
+            .ToList();
+
+        model.Cards =
+        [
+            BuildRatioCard("XAU_XAG", "XAU / XAG", "XAU", "XAG", orderedHistory, x => x.XAU_XAG),
+            BuildRatioCard("XAU_XPT", "XAU / XPT", "XAU", "XPT", orderedHistory, x => x.XAU_XPT),
+            BuildRatioCard("XAU_XPD", "XAU / XPD", "XAU", "XPD", orderedHistory, x => x.XAU_XPD),
+
+            BuildRatioCard("XAG_XAU", "XAG / XAU", "XAG", "XAU", orderedHistory, x => x.XAG_XAU),
+            BuildRatioCard("XAG_XPT", "XAG / XPT", "XAG", "XPT", orderedHistory, x => x.XAG_XPT),
+            BuildRatioCard("XAG_XPD", "XAG / XPD", "XAG", "XPD", orderedHistory, x => x.XAG_XPD),
+
+            BuildRatioCard("XPT_XAU", "XPT / XAU", "XPT", "XAU", orderedHistory, x => x.XPT_XAU),
+            BuildRatioCard("XPT_XAG", "XPT / XAG", "XPT", "XAG", orderedHistory, x => x.XPT_XAG),
+            BuildRatioCard("XPT_XPD", "XPT / XPD", "XPT", "XPD", orderedHistory, x => x.XPT_XPD),
+
+            BuildRatioCard("XPD_XAU", "XPD / XAU", "XPD", "XAU", orderedHistory, x => x.XPD_XAU),
+            BuildRatioCard("XPD_XAG", "XPD / XAG", "XPD", "XAG", orderedHistory, x => x.XPD_XAG),
+            BuildRatioCard("XPD_XPT", "XPD / XPT", "XPD", "XPT", orderedHistory, x => x.XPD_XPT)
+        ];
+
+        return View(model);
+    }
+
+    private static RatioCardViewModel BuildRatioCard(
+        string key,
+        string title,
+        string baseMetal,
+        string quoteMetal,
+        List<MetalPriceRatio> history,
+        Func<MetalPriceRatio, decimal> selector)
+    {
+        var values = history.Select(selector).ToList();
+        var current = values.LastOrDefault();
+        var previous = values.Count > 1 ? values[^2] : (decimal?)null;
+
+        var change = previous.HasValue ? current - previous.Value : 0m;
+        var changePercent = previous.HasValue && previous.Value != 0m
+            ? (change / previous.Value) * 100m
+            : 0m;
+
+        var direction = "flat";
+        var arrow = "→";
+
+        if (previous.HasValue)
+        {
+            if (current > previous.Value)
+            {
+                direction = "up";
+                arrow = "↑";
+            }
+            else if (current < previous.Value)
+            {
+                direction = "down";
+                arrow = "↓";
+            }
+        }
+
+        var average = values.Count == 0 ? 0m : values.Average();
+
+        string valuation;
+        if (average == 0m)
+        {
+            valuation = "Fair";
+        }
+        else if (current > average * 1.02m)
+        {
+            valuation = "Overvalued";
+        }
+        else if (current < average * 0.98m)
+        {
+            valuation = "Undervalued";
+        }
+        else
+        {
+            valuation = "Fair";
+        }
+
+        var interpretation = BuildInterpretation(baseMetal, quoteMetal, direction, valuation);
+
+        return new RatioCardViewModel
+        {
+            Key = key,
+            Title = title,
+            BaseMetal = baseMetal,
+            QuoteMetal = quoteMetal,
+            CurrentValue = current,
+            PreviousValue = previous,
+            Change = change,
+            ChangePercent = changePercent,
+            Average = average,
+            Valuation = valuation,
+            Direction = direction,
+            DirectionArrow = arrow,
+            Interpretation = interpretation,
+            History = values,
+            SparklinePoints = BuildSparklinePoints(values)
+        };
+    }
+
+    private static string BuildInterpretation(
+       string baseMetal,
+       string quoteMetal,
+       string direction,
+       string valuation)
+    {
+        return valuation switch
+        {
+            "Overvalued" => $"{baseMetal}, {quoteMetal}'ye göre kısa dönem ortalamasının üzerinde fiyatlanıyor.",
+            "Undervalued" => $"{baseMetal}, {quoteMetal}'ye göre kısa dönem ortalamasının altında fiyatlanıyor.",
+            _ => direction switch
+            {
+                "up" => $"{baseMetal}, {quoteMetal}'ye göre kısa vadede güçleniyor.",
+                "down" => $"{baseMetal}, {quoteMetal}'ye göre kısa vadede zayıflıyor.",
+                _ => $"{baseMetal} / {quoteMetal} için belirgin kısa vadeli yön yok."
+            }
+        };
+    }
+
+    private static string BuildSparklinePoints(IReadOnlyList<decimal> values, int width = 140, int height = 42)
+    {
+        if (values == null || values.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        if (values.Count == 1)
+        {
+            var y = height / 2m;
+            return $"0,{y:0.##} {width},{y:0.##}";
+        }
+
+        var min = values.Min();
+        var max = values.Max();
+        var range = max - min;
+
+        if (range == 0m)
+        {
+            range = 1m;
+        }
+
+        var stepX = (decimal)width / (values.Count - 1);
+
+        var points = values.Select((value, index) =>
+        {
+            var x = index * stepX;
+            var normalized = (value - min) / range;
+            var y = height - (normalized * height);
+            return $"{x:0.##},{y:0.##}";
+        });
+
+        return string.Join(" ", points);
+    }
+
+    public async Task<IActionResult> RatiosV1(CancellationToken cancellationToken)
     {
         var latest = await _dbContext.MetalPriceRatios
             .AsNoTracking()

@@ -1,79 +1,264 @@
-﻿@model RatiosDashboardViewModel
+﻿@model MetalPriceDashboard.Models.RatiosDashboardPageViewModel
 
 @{
     ViewData["Title"] = "Metal Ratios Dashboard";
 }
 
+<style>
+    .ratios-page {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    .ratios-summary {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 18px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, .04);
+    }
+
+    .ratios-summary h2 {
+        margin-bottom: 12px;
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+
+    .ratios-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+    }
+
+    .ratio-card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, .04);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .ratio-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .ratio-title {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+    }
+
+    .valuation-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: .75rem;
+        font-weight: 700;
+        border: 1px solid #d1d5db;
+        background: #f9fafb;
+        color: #374151;
+        white-space: nowrap;
+    }
+
+    .valuation-overvalued {
+        background: rgba(220, 53, 69, .08);
+        color: #b42318;
+        border-color: rgba(220, 53, 69, .18);
+    }
+
+    .valuation-undervalued {
+        background: rgba(25, 135, 84, .08);
+        color: #027a48;
+        border-color: rgba(25, 135, 84, .18);
+    }
+
+    .valuation-fair {
+        background: rgba(108, 117, 125, .08);
+        color: #495057;
+        border-color: rgba(108, 117, 125, .18);
+    }
+
+    .ratio-main {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 12px;
+    }
+
+    .ratio-value {
+        font-size: 1.8rem;
+        font-weight: 800;
+        line-height: 1;
+    }
+
+    .ratio-sub {
+        font-size: .85rem;
+        color: #6b7280;
+        margin-top: 4px;
+    }
+
+    .ratio-trend {
+        text-align: right;
+        font-weight: 700;
+    }
+
+    .trend-up {
+        color: #198754;
+    }
+
+    .trend-down {
+        color: #dc3545;
+    }
+
+    .trend-flat {
+        color: #6c757d;
+    }
+
+    .sparkline-box {
+        height: 52px;
+        border-radius: 12px;
+        background: #f8fafc;
+        padding: 6px;
+    }
+
+    .sparkline {
+        width: 100%;
+        height: 40px;
+        display: block;
+    }
+
+    .ratio-stats {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .stat-box {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 10px;
+    }
+
+    .stat-label {
+        font-size: .75rem;
+        color: #6b7280;
+        margin-bottom: 4px;
+    }
+
+    .stat-value {
+        font-weight: 700;
+        font-size: .95rem;
+    }
+
+    .ratio-comment {
+        background: #f9fafb;
+        border-radius: 12px;
+        padding: 12px;
+        color: #374151;
+        font-size: .92rem;
+        line-height: 1.4;
+    }
+</style>
+
 <div class="container mt-4">
+    <div class="ratios-page">
+        <div class="ratios-summary">
+            <h2>Metal Ratios Dashboard</h2>
 
-    <h2 class="mb-3">Metal Ratios Dashboard</h2>
+            @if (Model.SnapshotTime.HasValue)
+            {
+                <div><strong>Snapshot Time:</strong> @Model.SnapshotTime.Value.ToString("dd.MM.yyyy HH:mm:ss")</div>
+            }
 
-    @if (Model.Latest == null)
-    {
-        <div class="alert alert-warning">
-            Veri bulunamadı.
-        </div>
-    }
-    else
-    {
-        <div class="card mb-3 shadow-sm">
-            <div class="card-body">
-                <strong>Snapshot:</strong> @Model.Latest.SnapshotTime
-                <br />
-                <strong>Created:</strong> @Model.Latest.CreatedAt
-            </div>
+            @if (Model.CreatedAt.HasValue)
+            {
+                <div><strong>Created At:</strong> @Model.CreatedAt.Value.ToString("dd.MM.yyyy HH:mm:ss")</div>
+            }
         </div>
 
-        <div class="row">
-
-            <!-- XAU -->
-            <div class="col-md-3">
-                <div class="card border-primary mb-3">
-                    <div class="card-body">
-                        <h5>XAU</h5>
-                        <div>XAU/XAG: @Model.Latest.XAU_XAG</div>
-                        <div>XAU/XPT: @Model.Latest.XAU_XPT</div>
-                        <div>XAU/XPD: @Model.Latest.XAU_XPD</div>
-                    </div>
-                </div>
+        @if (!Model.Cards.Any())
+        {
+            <div class="alert alert-warning mb-0">
+                Ratio verisi bulunamadı.
             </div>
+        }
+        else
+        {
+            <div class="ratios-grid">
+                @foreach (var card in Model.Cards)
+                {
+                    var trendClass = card.Direction switch
+                    {
+                        "up" => "trend-up",
+                        "down" => "trend-down",
+                        _ => "trend-flat"
+                    };
 
-            <!-- XAG -->
-            <div class="col-md-3">
-                <div class="card border-success mb-3">
-                    <div class="card-body">
-                        <h5>XAG</h5>
-                        <div>XAG/XAU: @Model.Latest.XAG_XAU</div>
-                        <div>XAG/XPT: @Model.Latest.XAG_XPT</div>
-                        <div>XAG/XPD: @Model.Latest.XAG_XPD</div>
+                    var valuationClass = card.Valuation switch
+                    {
+                        "Overvalued" => "valuation-overvalued",
+                        "Undervalued" => "valuation-undervalued",
+                        _ => "valuation-fair"
+                    };
+
+                    <div class="ratio-card">
+                        <div class="ratio-card-header">
+                            <h3 class="ratio-title">@card.Title</h3>
+                            <span class="valuation-badge @valuationClass">@card.Valuation</span>
+                        </div>
+
+                        <div class="ratio-main">
+                            <div>
+                                <div class="ratio-value">@card.CurrentValue.ToString("N4")</div>
+                                <div class="ratio-sub">Current Ratio</div>
+                            </div>
+
+                            <div class="ratio-trend @trendClass">
+                                <div>@card.DirectionArrow @card.Change.ToString("N4")</div>
+                                <div>(@card.ChangePercent.ToString("N2")%)</div>
+                            </div>
+                        </div>
+
+                        <div class="sparkline-box">
+                            <svg class="sparkline" viewBox="0 0 140 42" preserveAspectRatio="none">
+                                <polyline
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    class="@trendClass"
+                                    points="@card.SparklinePoints" />
+                            </svg>
+                        </div>
+
+                        <div class="ratio-stats">
+                            <div class="stat-box">
+                                <div class="stat-label">Previous</div>
+                                <div class="stat-value">
+                                    @(card.PreviousValue?.ToString("N4") ?? "-")
+                                </div>
+                            </div>
+
+                            <div class="stat-box">
+                                <div class="stat-label">20-Point Avg</div>
+                                <div class="stat-value">@card.Average.ToString("N4")</div>
+                            </div>
+                        </div>
+
+                        <div class="ratio-comment">
+                            @card.Interpretation
+                        </div>
                     </div>
-                </div>
+                }
             </div>
-
-            <!-- XPT -->
-            <div class="col-md-3">
-                <div class="card border-warning mb-3">
-                    <div class="card-body">
-                        <h5>XPT</h5>
-                        <div>XPT/XAU: @Model.Latest.XPT_XAU</div>
-                        <div>XPT/XAG: @Model.Latest.XPT_XAG</div>
-                        <div>XPT/XPD: @Model.Latest.XPT_XPD</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- XPD -->
-            <div class="col-md-3">
-                <div class="card border-danger mb-3">
-                    <div class="card-body">
-                        <h5>XPD</h5>
-                        <div>XPD/XAU: @Model.Latest.XPD_XAU</div>
-                        <div>XPD/XAG: @Model.Latest.XPD_XAG</div>
-                        <div>XPD/XPT: @Model.Latest.XPD_XPT</div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    }
+        }
+    </div>
 </div>
