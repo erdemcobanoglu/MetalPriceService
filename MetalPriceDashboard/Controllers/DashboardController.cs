@@ -73,6 +73,7 @@ public sealed class DashboardController : Controller
 
         return View(model);
     }
+    #region rates Process
 
     public async Task<IActionResult> Rates([FromQuery] RatesDashboardFilter filter, CancellationToken cancellationToken)
     {
@@ -111,8 +112,210 @@ public sealed class DashboardController : Controller
         };
 
         return View(model);
-    } 
+    }
 
+    public async Task<IActionResult> RatesV2([FromQuery] RatesDashboardFilter filter, CancellationToken cancellationToken)
+    {
+        var currencyCodes = await _dbContext.RatePeriodSummaries
+            .AsNoTracking()
+            .Where(x => !string.IsNullOrWhiteSpace(x.CurrencyCode))
+            .Select(x => x.CurrencyCode)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToListAsync(cancellationToken);
+
+        IQueryable<RatePeriodSummary> query = _dbContext.RatePeriodSummaries.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(filter.CurrencyCode))
+        {
+            query = query.Where(x => x.CurrencyCode == filter.CurrencyCode);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.PeriodType))
+        {
+            query = query.Where(x => x.PeriodType == filter.PeriodType);
+        }
+
+        var items = await query
+            .OrderBy(x => x.CurrencyCode)
+            .ThenBy(x => x.PeriodStartDate)
+            .ThenBy(x => x.PeriodTypeSort)
+            .Take(1000)
+            .ToListAsync(cancellationToken);
+
+        var model = new RatesDashboardPageViewModel
+        {
+            Filter = filter,
+            Items = items,
+            CurrencyCodes = currencyCodes
+        };
+
+        model.Cards = BuildRateCards(items, filter);
+
+        return View(model);
+    }
+
+    private static List<RateCardViewModel> BuildRateCards(
+    List<RatePeriodSummary> items,
+    RatesDashboardFilter filter)
+    {
+        if (items == null || items.Count == 0)
+        {
+            return [];
+        }
+
+        var selectedCurrencies = !string.IsNullOrWhiteSpace(filter.CurrencyCode)
+            ? [filter.CurrencyCode]
+            : items
+                .Select(x => x.CurrencyCode)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x)
+                .Take(6) // çok kalabalık olmasın diye
+                .ToList();
+
+        var cards = new List<RateCardViewModel>();
+
+        foreach (var currencyCode in selectedCurrencies)
+        {
+            var history = items
+                .Where(x => string.Equals(x.CurrencyCode, currencyCode, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(x => x.PeriodStartDate)
+                .ThenBy(x => x.PeriodTypeSort)
+                .TakeLast(20)
+                .ToList();
+
+            if (history.Count == 0)
+            {
+                continue;
+            }
+
+            cards.Add(BuildRateCard(
+                key: $"{currencyCode}_ForexBuying",
+                title: $"{currencyCode} / Forex Buying",
+                currencyCode: currencyCode,
+                metricName: "Forex Buying",
+                history: history,
+                selector: x => ((x.ForexBuyingMin ?? 0m) + (x.ForexBuyingMax ?? 0m)) / 2m));
+
+            cards.Add(BuildRateCard(
+                key: $"{currencyCode}_ForexSelling",
+                title: $"{currencyCode} / Forex Selling",
+                currencyCode: currencyCode,
+                metricName: "Forex Selling",
+                history: history,
+                selector: x => ((x.ForexSellingMin ?? 0m) + (x.ForexSellingMax ?? 0m)) / 2m));
+
+            cards.Add(BuildRateCard(
+                key: $"{currencyCode}_BanknoteSelling",
+                title: $"{currencyCode} / Banknote Selling",
+                currencyCode: currencyCode,
+                metricName: "Banknote Selling",
+                history: history,
+                selector: x => ((x.BanknoteSellingMin ?? 0m) + (x.BanknoteSellingMax ?? 0m)) / 2m));
+        }
+
+        return cards;
+    }
+
+    private static RateCardViewModel BuildRateCard(
+        string key,
+        string title,
+        string currencyCode,
+        string metricName,
+        List<RatePeriodSummary> history,
+        Func<RatePeriodSummary, decimal> selector)
+    {
+        var values = history.Select(selector).ToList();
+        var current = values.LastOrDefault();
+        var previous = values.Count > 1 ? values[^2] : (decimal?)null;
+
+        var change = previous.HasValue ? current - previous.Value : 0m;
+        var changePercent = previous.HasValue && previous.Value != 0m
+            ? (change / previous.Value) * 100m
+            : 0m;
+
+        var direction = "flat";
+        var arrow = "→";
+
+        if (previous.HasValue)
+        {
+            if (current > previous.Value)
+            {
+                direction = "up";
+                arrow = "↑";
+            }
+            else if (current < previous.Value)
+            {
+                direction = "down";
+                arrow = "↓";
+            }
+        }
+
+        var average = values.Count == 0 ? 0m : values.Average();
+
+        string valuation;
+        if (average == 0m)
+        {
+            valuation = "Fair";
+        }
+        else if (current > average * 1.02m)
+        {
+            valuation = "Overvalued";
+        }
+        else if (current < average * 0.98m)
+        {
+            valuation = "Undervalued";
+        }
+        else
+        {
+            valuation = "Fair";
+        }
+
+        var interpretation = BuildRateInterpretation(currencyCode, metricName, direction, valuation);
+
+        return new RateCardViewModel
+        {
+            Key = key,
+            Title = title,
+            CurrencyCode = currencyCode,
+            MetricName = metricName,
+            CurrentValue = current,
+            PreviousValue = previous,
+            Change = change,
+            ChangePercent = changePercent,
+            Average = average,
+            Valuation = valuation,
+            Direction = direction,
+            DirectionArrow = arrow,
+            Interpretation = interpretation,
+            History = values,
+            SparklinePoints = BuildSparklinePoints(values)
+        };
+    }
+
+    private static string BuildRateInterpretation(
+        string currencyCode,
+        string metricName,
+        string direction,
+        string valuation)
+    {
+        return valuation switch
+        {
+            "Overvalued" => $"{currencyCode} için {metricName} kısa dönem ortalamasının üzerinde.",
+            "Undervalued" => $"{currencyCode} için {metricName} kısa dönem ortalamasının altında.",
+            _ => direction switch
+            {
+                "up" => $"{currencyCode} için {metricName} kısa vadede yükseliş eğiliminde.",
+                "down" => $"{currencyCode} için {metricName} kısa vadede düşüş eğiliminde.",
+                _ => $"{currencyCode} için {metricName} tarafında belirgin kısa vadeli yön yok."
+            }
+        };
+    }
+
+
+    #endregion
+    #region Ratios Process
     public async Task<IActionResult> Ratios(CancellationToken cancellationToken)
     {
         var snapshots = await _dbContext.MetalPriceRatios
@@ -307,6 +510,7 @@ public sealed class DashboardController : Controller
 
         return View(model);
     }
+    #endregion
 
     public IActionResult Error()
     {
