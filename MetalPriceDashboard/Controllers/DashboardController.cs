@@ -62,7 +62,7 @@ public sealed class DashboardController : Controller
             .ThenBy(x => x.MetalSort)
             .ThenBy(x => x.PeriodStartDate)
             .ThenBy(x => x.PeriodTypeSort)
-            .Take(1000)
+            //.Take(1000)
             .ToListAsync(cancellationToken);
 
         var model = new MetalDashboardPageViewModel
@@ -140,7 +140,7 @@ public sealed class DashboardController : Controller
             .OrderBy(x => x.CurrencyCode)
             .ThenBy(x => x.PeriodStartDate)
             .ThenBy(x => x.PeriodTypeSort)
-            .Take(1000)
+            //.Take(1000)
             .ToListAsync(cancellationToken);
 
         var model = new RatesDashboardPageViewModel
