@@ -1,12 +1,79 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using CoinMarketCap.Service.Application.Abstractions;
+using CoinMarketCap.Service.Application.Models;
+using CoinMarketCap.Service.Infrastructure.Persistence.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace CoinMarketCap.Service.Infrastructure.Persistence.Repositories
 {
-    internal class EfPriceRepository
+    public sealed class EfPriceRepository : IPriceRepository
     {
+        private readonly CoinMarketCapDbContext _dbContext;
+
+        public EfPriceRepository(CoinMarketCapDbContext dbContext)
+        {
+            _dbContext = dbContext;
+        }
+
+        public async Task SaveSnapshotAsync(
+            PriceSnapshot snapshot,
+            CancellationToken cancellationToken = default)
+        {
+            var entity = new PriceSnapshotEntity
+            {
+                CreatedAtUtc = snapshot.CreatedAtUtc,
+                Prices = snapshot.Prices.Select(x => new CryptoPriceEntity
+                {
+                    Symbol = x.Symbol,
+                    Name = x.Name,
+                    ConvertCurrency = x.ConvertCurrency,
+                    Price = x.Price,
+                    MarketCap = x.MarketCap,
+                    Volume24h = x.Volume24h,
+                    PercentChange1h = x.PercentChange1h,
+                    PercentChange24h = x.PercentChange24h,
+                    PercentChange7d = x.PercentChange7d,
+                    LastUpdatedUtc = x.LastUpdatedUtc
+                }).ToList()
+            };
+
+            _dbContext.PriceSnapshots.Add(entity);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task<PriceSnapshot?> GetLatestSnapshotAsync(
+            CancellationToken cancellationToken = default)
+        {
+            var entity = await _dbContext.PriceSnapshots
+                .AsNoTracking()
+                .Include(x => x.Prices)
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (entity is null)
+            {
+                return null;
+            }
+
+            return new PriceSnapshot
+            {
+                CreatedAtUtc = entity.CreatedAtUtc,
+                Prices = entity.Prices
+                    .OrderBy(x => x.Symbol)
+                    .Select(x => new CryptoPrice
+                    {
+                        Symbol = x.Symbol,
+                        Name = x.Name,
+                        ConvertCurrency = x.ConvertCurrency,
+                        Price = x.Price,
+                        MarketCap = x.MarketCap,
+                        Volume24h = x.Volume24h,
+                        PercentChange1h = x.PercentChange1h,
+                        PercentChange24h = x.PercentChange24h,
+                        PercentChange7d = x.PercentChange7d,
+                        LastUpdatedUtc = x.LastUpdatedUtc
+                    })
+                    .ToArray()
+            };
+        }
     }
 }

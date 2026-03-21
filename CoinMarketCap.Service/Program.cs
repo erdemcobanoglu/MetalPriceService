@@ -1,15 +1,17 @@
-﻿using CoinMarketCap.Service.Host;
-using CoinMarketCap.Service.Shared.Options;
-using CoinMarketCapWorker.Host;
-using CoinMarketCapWorker.Infrastructure.DependencyInjection;
-using CoinMarketCapWorker.Shared.Options;
+﻿using CoinMarketCap.Service.Shared.Options;
+using CoinMarketCap.Service.Infrastructure.DependencyInjection;
 using Serilog;
+using CoinMarketCapWorker.Host;
 
 var builder = Host.CreateApplicationBuilder(args);
 
+// Serilog init
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .CreateLogger();
+
+// 🔥 BURASI ÖNEMLİ
+builder.Services.AddSerilog();
 
 builder.Services
     .AddOptions<CoinMarketCapOptions>()
@@ -28,8 +30,6 @@ builder.Services
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHostedService<Worker>();
-
-builder.Host.UseSerilog();
 
 var app = builder.Build();
 app.Run();

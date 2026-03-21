@@ -6,7 +6,11 @@ using System.Threading.Tasks;
 
 namespace CoinMarketCap.Service.Infrastructure.Persistence.Entities
 {
-    internal class PriceSnapshotEntity
+    public sealed class PriceSnapshotEntity
     {
+        public long Id { get; set; }
+        public DateTimeOffset CreatedAtUtc { get; set; }
+
+        public ICollection<CryptoPriceEntity> Prices { get; set; } = new List<CryptoPriceEntity>();
     }
 }
