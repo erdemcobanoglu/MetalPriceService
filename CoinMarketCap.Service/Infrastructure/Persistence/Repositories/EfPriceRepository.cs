@@ -15,10 +15,10 @@ namespace CoinMarketCap.Service.Infrastructure.Persistence.Repositories
         }
 
         public async Task SaveSnapshotAsync(
-            PriceSnapshot snapshot,
+            CryptoPriceSnapshot snapshot,
             CancellationToken cancellationToken = default)
         {
-            var entity = new PriceSnapshotEntity
+            var entity = new CryptoPriceSnapshotEntity
             {
                 CreatedAtUtc = snapshot.CreatedAtUtc,
                 Prices = snapshot.Prices.Select(x => new CryptoPriceEntity
@@ -40,7 +40,7 @@ namespace CoinMarketCap.Service.Infrastructure.Persistence.Repositories
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        public async Task<PriceSnapshot?> GetLatestSnapshotAsync(
+        public async Task<CryptoPriceSnapshot?> GetLatestSnapshotAsync(
             CancellationToken cancellationToken = default)
         {
             var entity = await _dbContext.PriceSnapshots
@@ -54,7 +54,7 @@ namespace CoinMarketCap.Service.Infrastructure.Persistence.Repositories
                 return null;
             }
 
-            return new PriceSnapshot
+            return new CryptoPriceSnapshot
             {
                 CreatedAtUtc = entity.CreatedAtUtc,
                 Prices = entity.Prices

@@ -17,8 +17,9 @@ builder.Services
     .AddOptions<CoinMarketCapOptions>()
     .Bind(builder.Configuration.GetSection(CoinMarketCapOptions.SectionName))
     .Validate(x => !string.IsNullOrWhiteSpace(x.ApiKey), "CoinMarketCap:ApiKey zorunludur.")
-    .Validate(x => x.Symbols is { Length: > 0 }, "CoinMarketCap:Symbols boş olamaz.")
     .Validate(x => !string.IsNullOrWhiteSpace(x.ConvertCurrency), "CoinMarketCap:ConvertCurrency zorunludur.")
+    .Validate(x => x.Start > 0, "CoinMarketCap:Start 0'dan büyük olmalıdır.")
+    .Validate(x => x.Limit > 0, "CoinMarketCap:Limit 0'dan büyük olmalıdır.")
     .Validate(x => x.TimeoutSeconds > 0, "CoinMarketCap:TimeoutSeconds 0'dan büyük olmalıdır.")
     .ValidateOnStart();
 

@@ -9,9 +9,9 @@ using System.Threading.Tasks;
 
 namespace CoinMarketCap.Service.Infrastructure.Persistence.Mapping
 {
-    public sealed class PriceSnapshotConfiguration : IEntityTypeConfiguration<PriceSnapshotEntity>
+    public sealed class PriceSnapshotConfiguration : IEntityTypeConfiguration<CryptoPriceSnapshotEntity>
     {
-        public void Configure(EntityTypeBuilder<PriceSnapshotEntity> builder)
+        public void Configure(EntityTypeBuilder<CryptoPriceSnapshotEntity> builder)
         {
             builder.ToTable("PriceSnapshots");
 

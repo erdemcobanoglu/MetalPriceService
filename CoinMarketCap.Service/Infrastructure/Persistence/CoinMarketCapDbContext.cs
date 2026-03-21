@@ -10,7 +10,7 @@ namespace CoinMarketCap.Service.Infrastructure.Persistence
         {
         }
 
-        public DbSet<PriceSnapshotEntity> PriceSnapshots => Set<PriceSnapshotEntity>();
+        public DbSet<CryptoPriceSnapshotEntity> PriceSnapshots => Set<CryptoPriceSnapshotEntity>();
         public DbSet<CryptoPriceEntity> CryptoPrices => Set<CryptoPriceEntity>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

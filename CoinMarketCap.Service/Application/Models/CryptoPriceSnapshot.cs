@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CoinMarketCap.Service.Application.Models
 {
-    public sealed class PriceSnapshot
+    public sealed class CryptoPriceSnapshot
     {
         public DateTimeOffset CreatedAtUtc { get; init; }
         public IReadOnlyCollection<CryptoPrice> Prices { get; init; } = Array.Empty<CryptoPrice>();

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace CoinMarketCap.Service.Infrastructure.Persistence.Entities
 {
-    public sealed class PriceSnapshotEntity
+    public sealed class CryptoPriceSnapshotEntity
     {
         public long Id { get; set; }
         public DateTimeOffset CreatedAtUtc { get; set; }

@@ -9,7 +9,7 @@ namespace CoinMarketCap.Service.Application.Abstractions
 {
     public interface IPriceRepository
     {
-        Task SaveSnapshotAsync(PriceSnapshot snapshot, CancellationToken cancellationToken = default);
-        Task<PriceSnapshot?> GetLatestSnapshotAsync(CancellationToken cancellationToken = default);
+        Task SaveSnapshotAsync(CryptoPriceSnapshot snapshot, CancellationToken cancellationToken = default);
+        Task<CryptoPriceSnapshot?> GetLatestSnapshotAsync(CancellationToken cancellationToken = default);
     }
 }

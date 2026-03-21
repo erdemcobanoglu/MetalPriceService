@@ -15,8 +15,8 @@ public sealed class CoinMarketCapDbContextFactory : IDesignTimeDbContextFactory<
             .AddEnvironmentVariables()
             .Build();
 
-        var connectionString = configuration.GetConnectionString("RatesDb")
-            ?? throw new InvalidOperationException("Connection string 'RatesDb' bulunamadı.");
+        var connectionString = configuration.GetConnectionString("CoinmarketCapDb")
+            ?? throw new InvalidOperationException("Connection string 'CoinmarketCapDb' bulunamadı.");
 
         var optionsBuilder = new DbContextOptionsBuilder<CoinMarketCapDbContext>();
         optionsBuilder.UseSqlServer(connectionString);

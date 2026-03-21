@@ -14,6 +14,8 @@ namespace CoinMarketCap.Service.Shared.Options
         public string ApiKey { get; init; } = string.Empty;
         public string[] Symbols { get; init; } = Array.Empty<string>();
         public string ConvertCurrency { get; init; } = "USD";
+        public int Start { get; init; } = 1;
+        public int Limit { get; init; } = 100;
         public int TimeoutSeconds { get; init; } = 30;
     }
 }

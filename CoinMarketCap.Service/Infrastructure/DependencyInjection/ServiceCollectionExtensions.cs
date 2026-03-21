@@ -17,7 +17,7 @@ namespace CoinMarketCap.Service.Infrastructure.DependencyInjection
             this IServiceCollection services,
             IConfiguration configuration)
         {
-            var connectionString = configuration.GetConnectionString("RatesDb");
+            var connectionString = configuration.GetConnectionString("CoinmarketCapDb");
 
             services.AddDbContext<CoinMarketCapDbContext>(options =>
             {

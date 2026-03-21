@@ -43,7 +43,7 @@ namespace CoinMarketCap.Service.Application.Services
                 return;
             }
 
-            var snapshot = new PriceSnapshot
+            var snapshot = new CryptoPriceSnapshot
             {
                 CreatedAtUtc = DateTimeOffset.UtcNow,
                 Prices = prices
