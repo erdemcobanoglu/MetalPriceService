@@ -319,60 +319,78 @@ public sealed class DashboardController : Controller
     #region Ratios Process
     public async Task<IActionResult> Ratios(CancellationToken cancellationToken)
     {
-        var snapshots = await _dbContext.MetalPriceRatios
+        var ratioSnapshots = await _dbContext.MetalPriceRatios
             .AsNoTracking()
             .OrderByDescending(x => x.SnapshotTime)
             .ThenByDescending(x => x.Id)
             .Take(20)
             .ToListAsync(cancellationToken);
 
-        var latest = snapshots.FirstOrDefault();
+        var latestRatio = ratioSnapshots.FirstOrDefault();
 
         var model = new RatiosDashboardPageViewModel
         {
-            SnapshotTime = latest?.SnapshotTime,
-            CreatedAt = latest?.CreatedAt
+            SnapshotTime = latestRatio?.SnapshotTime,
+            CreatedAt = latestRatio?.CreatedAt
         };
 
-        if (latest is null)
+        if (latestRatio is null)
         {
             return View(model);
         }
 
-        var orderedHistory = snapshots
+        var priceSnapshots = await _dbContext.MetalPriceSnapshots
+            .AsNoTracking()
+            .OrderByDescending(x => x.TakenAtUtc)
+            .ThenByDescending(x => x.Id)
+            .Take(20)
+            .ToListAsync(cancellationToken);
+
+        var orderedRatioHistory = ratioSnapshots
             .OrderBy(x => x.SnapshotTime)
+            .ThenBy(x => x.Id)
+            .ToList();
+
+        var orderedPriceHistory = priceSnapshots
+            .OrderBy(x => x.TakenAtUtc)
             .ThenBy(x => x.Id)
             .ToList();
 
         model.Cards =
         [
-            BuildRatioCard("XAU_XAG", "XAU / XAG", "XAU", "XAG", orderedHistory, x => x.XAU_XAG),
-            BuildRatioCard("XAU_XPT", "XAU / XPT", "XAU", "XPT", orderedHistory, x => x.XAU_XPT),
-            BuildRatioCard("XAU_XPD", "XAU / XPD", "XAU", "XPD", orderedHistory, x => x.XAU_XPD),
+            BuildPriceCard("XAU_PRICE", "XAU / USD", "XAU", orderedPriceHistory, x => x.XAU),
+        BuildRatioCard("XAU_XAG", "XAU / XAG", "XAU", "XAG", orderedRatioHistory, x => x.XAU_XAG, 1),
+        BuildRatioCard("XAU_XPT", "XAU / XPT", "XAU", "XPT", orderedRatioHistory, x => x.XAU_XPT, 2),
+        BuildRatioCard("XAU_XPD", "XAU / XPD", "XAU", "XPD", orderedRatioHistory, x => x.XAU_XPD, 3),
 
-            BuildRatioCard("XAG_XAU", "XAG / XAU", "XAG", "XAU", orderedHistory, x => x.XAG_XAU),
-            BuildRatioCard("XAG_XPT", "XAG / XPT", "XAG", "XPT", orderedHistory, x => x.XAG_XPT),
-            BuildRatioCard("XAG_XPD", "XAG / XPD", "XAG", "XPD", orderedHistory, x => x.XAG_XPD),
+        BuildPriceCard("XAG_PRICE", "XAG / USD", "XAG", orderedPriceHistory, x => x.XAG),
+        BuildRatioCard("XAG_XAU", "XAG / XAU", "XAG", "XAU", orderedRatioHistory, x => x.XAG_XAU, 1),
+        BuildRatioCard("XAG_XPT", "XAG / XPT", "XAG", "XPT", orderedRatioHistory, x => x.XAG_XPT, 2),
+        BuildRatioCard("XAG_XPD", "XAG / XPD", "XAG", "XPD", orderedRatioHistory, x => x.XAG_XPD, 3),
 
-            BuildRatioCard("XPT_XAU", "XPT / XAU", "XPT", "XAU", orderedHistory, x => x.XPT_XAU),
-            BuildRatioCard("XPT_XAG", "XPT / XAG", "XPT", "XAG", orderedHistory, x => x.XPT_XAG),
-            BuildRatioCard("XPT_XPD", "XPT / XPD", "XPT", "XPD", orderedHistory, x => x.XPT_XPD),
+        BuildPriceCard("XPT_PRICE", "XPT / USD", "XPT", orderedPriceHistory, x => x.XPT),
+        BuildRatioCard("XPT_XAU", "XPT / XAU", "XPT", "XAU", orderedRatioHistory, x => x.XPT_XAU, 1),
+        BuildRatioCard("XPT_XAG", "XPT / XAG", "XPT", "XAG", orderedRatioHistory, x => x.XPT_XAG, 2),
+        BuildRatioCard("XPT_XPD", "XPT / XPD", "XPT", "XPD", orderedRatioHistory, x => x.XPT_XPD, 3),
 
-            BuildRatioCard("XPD_XAU", "XPD / XAU", "XPD", "XAU", orderedHistory, x => x.XPD_XAU),
-            BuildRatioCard("XPD_XAG", "XPD / XAG", "XPD", "XAG", orderedHistory, x => x.XPD_XAG),
-            BuildRatioCard("XPD_XPT", "XPD / XPT", "XPD", "XPT", orderedHistory, x => x.XPD_XPT)
+        BuildPriceCard("XPD_PRICE", "XPD / USD", "XPD", orderedPriceHistory, x => x.XPD),
+        BuildRatioCard("XPD_XAU", "XPD / XAU", "XPD", "XAU", orderedRatioHistory, x => x.XPD_XAU, 1),
+        BuildRatioCard("XPD_XAG", "XPD / XAG", "XPD", "XAG", orderedRatioHistory, x => x.XPD_XAG, 2),
+        BuildRatioCard("XPD_XPT", "XPD / XPT", "XPD", "XPT", orderedRatioHistory, x => x.XPD_XPT, 3)
         ];
 
         return View(model);
     }
 
+
     private static RatioCardViewModel BuildRatioCard(
-        string key,
-        string title,
-        string baseMetal,
-        string quoteMetal,
-        List<MetalPriceRatio> history,
-        Func<MetalPriceRatio, decimal> selector)
+    string key,
+    string title,
+    string baseMetal,
+    string quoteMetal,
+    List<MetalPriceRatio> history,
+    Func<MetalPriceRatio, decimal> selector,
+    int sortOrder)
     {
         var values = history.Select(selector).ToList();
         var current = values.LastOrDefault();
@@ -420,7 +438,7 @@ public sealed class DashboardController : Controller
             valuation = "Fair";
         }
 
-        var interpretation = BuildInterpretation(baseMetal, quoteMetal, direction, valuation);
+        var interpretation = BuildRatioInterpretation(baseMetal, quoteMetal, direction, valuation);
 
         return new RatioCardViewModel
         {
@@ -428,6 +446,85 @@ public sealed class DashboardController : Controller
             Title = title,
             BaseMetal = baseMetal,
             QuoteMetal = quoteMetal,
+            SortOrder = sortOrder,
+            ValueLabel = "Current Ratio",
+            CurrentValue = current,
+            PreviousValue = previous,
+            Change = change,
+            ChangePercent = changePercent,
+            Average = average,
+            Valuation = valuation,
+            Direction = direction,
+            DirectionArrow = arrow,
+            Interpretation = interpretation,
+            History = values,
+            SparklinePoints = BuildSparklinePoints(values)
+        };
+    }
+     
+    private static RatioCardViewModel BuildPriceCard(
+    string key,
+    string title,
+    string baseMetal,
+    List<MetalPriceSnapshot> history,
+    Func<MetalPriceSnapshot, decimal> selector)
+    {
+        var values = history.Select(selector).ToList();
+        var current = values.LastOrDefault();
+        var previous = values.Count > 1 ? values[^2] : (decimal?)null;
+
+        var change = previous.HasValue ? current - previous.Value : 0m;
+        var changePercent = previous.HasValue && previous.Value != 0m
+            ? (change / previous.Value) * 100m
+            : 0m;
+
+        var direction = "flat";
+        var arrow = "→";
+
+        if (previous.HasValue)
+        {
+            if (current > previous.Value)
+            {
+                direction = "up";
+                arrow = "↑";
+            }
+            else if (current < previous.Value)
+            {
+                direction = "down";
+                arrow = "↓";
+            }
+        }
+
+        var average = values.Count == 0 ? 0m : values.Average();
+
+        string valuation;
+        if (average == 0m)
+        {
+            valuation = "Fair";
+        }
+        else if (current > average * 1.02m)
+        {
+            valuation = "Overvalued";
+        }
+        else if (current < average * 0.98m)
+        {
+            valuation = "Undervalued";
+        }
+        else
+        {
+            valuation = "Fair";
+        }
+
+        var interpretation = BuildPriceInterpretation(baseMetal, direction, valuation);
+
+        return new RatioCardViewModel
+        {
+            Key = key,
+            Title = title,
+            BaseMetal = baseMetal,
+            QuoteMetal = "USD",
+            SortOrder = 0,
+            ValueLabel = "Current Price",
             CurrentValue = current,
             PreviousValue = previous,
             Change = change,
@@ -442,11 +539,29 @@ public sealed class DashboardController : Controller
         };
     }
 
-    private static string BuildInterpretation(
-       string baseMetal,
-       string quoteMetal,
-       string direction,
-       string valuation)
+    private static string BuildPriceInterpretation(
+    string metal,
+    string direction,
+    string valuation)
+    {
+        return valuation switch
+        {
+            "Overvalued" => $"{metal} fiyatı kısa dönem ortalamasının üzerinde.",
+            "Undervalued" => $"{metal} fiyatı kısa dönem ortalamasının altında.",
+            _ => direction switch
+            {
+                "up" => $"{metal} fiyatı kısa vadede yükseliş eğiliminde.",
+                "down" => $"{metal} fiyatı kısa vadede düşüş eğiliminde.",
+                _ => $"{metal} fiyatında belirgin kısa vadeli yön yok."
+            }
+        };
+    }
+
+    private static string BuildRatioInterpretation(
+    string baseMetal,
+    string quoteMetal,
+    string direction,
+    string valuation)
     {
         return valuation switch
         {

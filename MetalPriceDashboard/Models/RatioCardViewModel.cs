@@ -7,6 +7,9 @@
         public string BaseMetal { get; set; } = string.Empty;
         public string QuoteMetal { get; set; } = string.Empty;
 
+        public int SortOrder { get; set; }
+        public string ValueLabel { get; set; } = "Current Ratio";
+
         public decimal CurrentValue { get; set; }
         public decimal? PreviousValue { get; set; }
         public decimal Change { get; set; }
