@@ -78,12 +78,12 @@ public sealed class DashboardController : Controller
     public async Task<IActionResult> Rates([FromQuery] RatesDashboardFilter filter, CancellationToken cancellationToken)
     {
         var currencyCodes = await _dbContext.RatePeriodSummaries
-            .AsNoTracking()
-            .Where(x => !string.IsNullOrWhiteSpace(x.CurrencyCode))
-            .Select(x => x.CurrencyCode)
-            .Distinct()
-            .OrderBy(x => x)
-            .ToListAsync(cancellationToken);
+        .AsNoTracking()
+        .Where(x => !string.IsNullOrWhiteSpace(x.CurrencyCode))
+        .Select(x => x.CurrencyCode)
+        .Distinct()
+        .OrderBy(x => x)
+        .ToListAsync(cancellationToken);
 
         IQueryable<RatePeriodSummary> query = _dbContext.RatePeriodSummaries.AsNoTracking();
 
@@ -99,7 +99,8 @@ public sealed class DashboardController : Controller
 
         var items = await query
             .OrderBy(x => x.CurrencyCode)
-            .ThenBy(x => x.PeriodStartDate)
+            .ThenByDescending(x => x.PeriodStartDate)
+            .ThenByDescending(x => x.PeriodEndDate)
             .ThenBy(x => x.PeriodTypeSort)
             .Take(1000)
             .ToListAsync(cancellationToken);
@@ -137,11 +138,12 @@ public sealed class DashboardController : Controller
         }
 
         var items = await query
-            .OrderBy(x => x.CurrencyCode)
-            .ThenBy(x => x.PeriodStartDate)
-            .ThenBy(x => x.PeriodTypeSort)
-            //.Take(1000)
-            .ToListAsync(cancellationToken);
+             .OrderBy(x => x.CurrencyCode)
+             .ThenByDescending(x => x.PeriodStartDate)
+             .ThenByDescending(x => x.PeriodEndDate)
+             .ThenBy(x => x.PeriodTypeSort)
+             //.Take(1000)
+             .ToListAsync(cancellationToken);
 
         var model = new RatesDashboardPageViewModel
         {
@@ -166,7 +168,7 @@ public sealed class DashboardController : Controller
 
         var selectedCurrencies = !string.IsNullOrWhiteSpace(filter.CurrencyCode)
              ? new List<string> { filter.CurrencyCode! }
-    :        items
+    : items
             .Select(x => x.CurrencyCode)
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -502,9 +504,16 @@ public sealed class DashboardController : Controller
             .ThenByDescending(x => x.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
+        var latestSnapshot = await _dbContext.MetalPriceSnapshots
+            .AsNoTracking()
+            .OrderByDescending(x => x.TakenAtUtc)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
         var model = new RatiosDashboardViewModel
         {
-            Latest = latest
+            Latest = latest,
+            LatestSnapshot = latestSnapshot
         };
 
         return View(model);

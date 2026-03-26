@@ -12,7 +12,9 @@ public sealed class AppDbContext : DbContext
 
     public DbSet<MetalPricePeriodSummary> MetalPricePeriodSummaries => Set<MetalPricePeriodSummary>();
     public DbSet<RatePeriodSummary> RatePeriodSummaries => Set<RatePeriodSummary>();
-    public DbSet<MetalPriceRatio> MetalPriceRatios { get; set; }
+    public DbSet<MetalPriceRatio> MetalPriceRatios { get; set; }  
+    public DbSet<MetalPriceSnapshot> MetalPriceSnapshots { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

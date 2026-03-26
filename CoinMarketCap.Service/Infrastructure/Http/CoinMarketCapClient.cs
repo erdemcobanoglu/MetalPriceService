@@ -31,8 +31,8 @@ namespace CoinMarketCap.Service.Infrastructure.Http
             CancellationToken cancellationToken = default)
         {
             var symbolCsv = string.Join(",", symbols);
-            var requestUri =
-                $"/v1/cryptocurrency/quotes/latest?symbol={Uri.EscapeDataString(symbolCsv)}&convert={Uri.EscapeDataString(convertCurrency)}";
+            var requestUri = $"/v1/cryptocurrency/quotes/latest?symbol=&convert=USD";
+               // $"/v1/cryptocurrency/quotes/latest?symbol={Uri.EscapeDataString(symbolCsv)}&convert={Uri.EscapeDataString(convertCurrency)}";
 
             _logger.LogInformation(
                 "Sending CoinMarketCap request. Symbols={Symbols}, ConvertCurrency={ConvertCurrency}",
