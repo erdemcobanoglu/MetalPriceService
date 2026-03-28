@@ -1,21 +1,26 @@
 ﻿using System.Text.Json.Serialization;
 
-
 namespace CoinMarketCap.Service.Infrastructure.Http.Dtos
 {
-    public sealed class CoinMarketCapLatestQuotesResponseDto
+    public sealed class CoinMarketCapLatestListingsResponseDto
     {
         [JsonPropertyName("data")]
-        public Dictionary<string, CoinMarketCapCoinDto> Data { get; set; } = new();
+        public List<CoinMarketCapCoinDto> Data { get; set; } = new();
     }
 
     public sealed class CoinMarketCapCoinDto
     {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+
         [JsonPropertyName("name")]
         public string Name { get; set; } = default!;
 
         [JsonPropertyName("symbol")]
         public string Symbol { get; set; } = default!;
+
+        [JsonPropertyName("cmc_rank")]
+        public int CmcRank { get; set; }
 
         [JsonPropertyName("quote")]
         public Dictionary<string, CoinMarketCapQuoteDto> Quote { get; set; } = new();

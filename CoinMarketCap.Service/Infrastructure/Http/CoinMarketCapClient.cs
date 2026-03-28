@@ -1,6 +1,7 @@
 ﻿using CoinMarketCap.Service.Application.Abstractions;
 using CoinMarketCap.Service.Application.Models;
 using CoinMarketCap.Service.Infrastructure.Http.Dtos;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,8 +32,8 @@ namespace CoinMarketCap.Service.Infrastructure.Http
             CancellationToken cancellationToken = default)
         {
             var symbolCsv = string.Join(",", symbols);
-            var requestUri = $"/v1/cryptocurrency/quotes/latest?symbol=&convert=USD";
-               // $"/v1/cryptocurrency/quotes/latest?symbol={Uri.EscapeDataString(symbolCsv)}&convert={Uri.EscapeDataString(convertCurrency)}";
+            var requestUri = "/v1/cryptocurrency/listings/latest?start=1&limit=100&convert=USD";
+            // $"/v1/cryptocurrency/quotes/latest?symbol={Uri.EscapeDataString(symbolCsv)}&convert={Uri.EscapeDataString(convertCurrency)}";
 
             _logger.LogInformation(
                 "Sending CoinMarketCap request. Symbols={Symbols}, ConvertCurrency={ConvertCurrency}",
@@ -52,7 +53,7 @@ namespace CoinMarketCap.Service.Infrastructure.Http
                 response.EnsureSuccessStatusCode();
             }
 
-            var dto = JsonSerializer.Deserialize<CoinMarketCapLatestQuotesResponseDto>(body, JsonOptions);
+            var dto = JsonSerializer.Deserialize<CoinMarketCapLatestListingsResponseDto>(body, JsonOptions);
 
             if (dto?.Data is null || dto.Data.Count == 0)
             {
@@ -61,7 +62,7 @@ namespace CoinMarketCap.Service.Infrastructure.Http
 
             var result = new List<CryptoPrice>();
 
-            foreach (var item in dto.Data.Values)
+            foreach (var item in dto.Data)
             {
                 if (!item.Quote.TryGetValue(convertCurrency, out var quote))
                 {
