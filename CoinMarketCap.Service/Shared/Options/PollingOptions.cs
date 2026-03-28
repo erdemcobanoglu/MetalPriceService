@@ -10,7 +10,7 @@ namespace CoinMarketCap.Service.Shared.Options
     {
         public const string SectionName = "Polling";
 
-        public int IntervalSeconds { get; init; } = 300;
+        public TimeSpan DailyRunTimeUtc { get; init; } = TimeSpan.Zero;
         public bool RunImmediatelyOnStartup { get; init; } = true;
     }
 }

@@ -26,7 +26,8 @@ builder.Services
 builder.Services
     .AddOptions<PollingOptions>()
     .Bind(builder.Configuration.GetSection(PollingOptions.SectionName))
-    .Validate(x => x.IntervalSeconds > 0, "Polling:IntervalSeconds 0'dan büyük olmalıdır.")
+    .Validate(x => x.DailyRunTimeUtc >= TimeSpan.Zero && x.DailyRunTimeUtc < TimeSpan.FromDays(1),
+    "Polling:DailyRunTimeUtc 00:00:00 ile 23:59:59 arasında olmalıdır.")
     .ValidateOnStart();
 
 builder.Services.AddInfrastructure(builder.Configuration);
