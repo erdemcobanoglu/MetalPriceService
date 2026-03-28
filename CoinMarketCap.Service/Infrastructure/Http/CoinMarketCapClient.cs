@@ -33,7 +33,6 @@ namespace CoinMarketCap.Service.Infrastructure.Http
         {
             var symbolCsv = string.Join(",", symbols);
             var requestUri = "/v1/cryptocurrency/listings/latest?start=1&limit=100&convert=USD";
-            // $"/v1/cryptocurrency/quotes/latest?symbol={Uri.EscapeDataString(symbolCsv)}&convert={Uri.EscapeDataString(convertCurrency)}";
 
             _logger.LogInformation(
                 "Sending CoinMarketCap request. Symbols={Symbols}, ConvertCurrency={ConvertCurrency}",
