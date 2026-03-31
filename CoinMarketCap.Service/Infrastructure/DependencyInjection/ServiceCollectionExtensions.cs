@@ -24,8 +24,15 @@ namespace CoinMarketCap.Service.Infrastructure.DependencyInjection
                 options.UseSqlServer(connectionString);
             });
 
+            services.Configure<CoinMarketCapOptions>(
+                configuration.GetSection(CoinMarketCapOptions.SectionName));
+
+            services.Configure<CoinGeckoOptions>(
+                configuration.GetSection(CoinGeckoOptions.SectionName));
+
             services.AddScoped<IPriceRepository, EfPriceRepository>();
             services.AddScoped<PriceIngestionService>();
+            services.AddScoped<CoinGeckoPriceIngestionService>();
 
             services.AddHttpClient<ICoinMarketCapClient, CoinMarketCapClient>((sp, client) =>
             {
@@ -35,6 +42,16 @@ namespace CoinMarketCap.Service.Infrastructure.DependencyInjection
                 client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
                 client.DefaultRequestHeaders.Add("X-CMC_PRO_API_KEY", options.ApiKey);
                 client.DefaultRequestHeaders.Add("Accept", "application/json");
+            });
+
+            services.AddHttpClient<ICoinGeckoClient, CoinGeckoClient>((sp, client) =>
+            {
+                var options = sp.GetRequiredService<IOptions<CoinGeckoOptions>>().Value;
+
+                client.BaseAddress = new Uri(options.BaseUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+                client.DefaultRequestHeaders.Add("Accept", "application/json");
+                client.DefaultRequestHeaders.Add("User-Agent", "CoinMarketCap.Service");
             });
 
             return services;

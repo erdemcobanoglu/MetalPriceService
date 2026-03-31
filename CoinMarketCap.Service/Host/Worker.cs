@@ -22,7 +22,7 @@ public sealed class Worker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("CoinMarketCap worker started.");
+        _logger.LogInformation("Price worker started.");
 
         if (_pollingOptions.RunImmediatelyOnStartup)
         {
@@ -53,32 +53,60 @@ public sealed class Worker : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error during ingestion.");
+                _logger.LogError(ex, "Unexpected error in worker loop.");
 
-                // retry safety
                 await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
             }
         }
 
-        _logger.LogInformation("CoinMarketCap worker stopped.");
+        _logger.LogInformation("Price worker stopped.");
     }
 
     private async Task RunOnceSafeAsync(CancellationToken stoppingToken)
     {
+        using var scope = _scopeFactory.CreateScope();
+
+        await RunCoinMarketCapSafeAsync(scope.ServiceProvider, stoppingToken);
+        await RunCoinGeckoSafeAsync(scope.ServiceProvider, stoppingToken);
+    }
+
+    private async Task RunCoinMarketCapSafeAsync(IServiceProvider serviceProvider, CancellationToken stoppingToken)
+    {
         try
         {
-            using var scope = _scopeFactory.CreateScope();
-            var ingestionService = scope.ServiceProvider.GetRequiredService<PriceIngestionService>();
+            var ingestionService = serviceProvider.GetRequiredService<PriceIngestionService>();
 
+            _logger.LogInformation("CoinMarketCap ingestion started.");
             await ingestionService.IngestAsync(stoppingToken);
+            _logger.LogInformation("CoinMarketCap ingestion completed successfully.");
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            _logger.LogInformation("Worker cancellation requested.");
+            _logger.LogInformation("CoinMarketCap ingestion cancelled.");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error during ingestion.");
+            _logger.LogError(ex, "CoinMarketCap ingestion failed.");
+        }
+    }
+
+    private async Task RunCoinGeckoSafeAsync(IServiceProvider serviceProvider, CancellationToken stoppingToken)
+    {
+        try
+        {
+            var ingestionService = serviceProvider.GetRequiredService<CoinGeckoPriceIngestionService>();
+
+            _logger.LogInformation("CoinGecko ingestion started.");
+            await ingestionService.IngestAsync(stoppingToken);
+            _logger.LogInformation("CoinGecko ingestion completed successfully.");
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            _logger.LogInformation("CoinGecko ingestion cancelled.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CoinGecko ingestion failed.");
         }
     }
 

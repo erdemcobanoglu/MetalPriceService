@@ -10,6 +10,7 @@ namespace CoinMarketCap.Service.Infrastructure.Persistence.Entities
     {
         public long Id { get; set; }
         public DateTimeOffset CreatedAtUtc { get; set; }
+        public string Source { get; set; } = default!;
 
         public ICollection<CryptoPriceEntity> Prices { get; set; } = new List<CryptoPriceEntity>();
     }

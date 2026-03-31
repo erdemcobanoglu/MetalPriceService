@@ -21,6 +21,7 @@ namespace CoinMarketCap.Service.Infrastructure.Persistence.Repositories
             var entity = new CryptoPriceSnapshotEntity
             {
                 CreatedAtUtc = snapshot.CreatedAtUtc,
+                Source = snapshot.Source,
                 Prices = snapshot.Prices.Select(x => new CryptoPriceEntity
                 {
                     Symbol = x.Symbol,
@@ -32,7 +33,9 @@ namespace CoinMarketCap.Service.Infrastructure.Persistence.Repositories
                     PercentChange1h = x.PercentChange1h,
                     PercentChange24h = x.PercentChange24h,
                     PercentChange7d = x.PercentChange7d,
-                    LastUpdatedUtc = x.LastUpdatedUtc
+                    LastUpdatedUtc = x.LastUpdatedUtc,
+                    Rank = x.Rank,
+                    Source = x.Source
                 }).ToList()
             };
 
@@ -57,6 +60,7 @@ namespace CoinMarketCap.Service.Infrastructure.Persistence.Repositories
             return new CryptoPriceSnapshot
             {
                 CreatedAtUtc = entity.CreatedAtUtc,
+                Source = entity.Source,
                 Prices = entity.Prices
                     .OrderBy(x => x.Symbol)
                     .Select(x => new CryptoPrice
@@ -70,7 +74,9 @@ namespace CoinMarketCap.Service.Infrastructure.Persistence.Repositories
                         PercentChange1h = x.PercentChange1h,
                         PercentChange24h = x.PercentChange24h,
                         PercentChange7d = x.PercentChange7d,
-                        LastUpdatedUtc = x.LastUpdatedUtc
+                        LastUpdatedUtc = x.LastUpdatedUtc,
+                        Rank = x.Rank,
+                        Source = x.Source
                     })
                     .ToArray()
             };

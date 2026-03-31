@@ -11,6 +11,7 @@ namespace CoinMarketCap.Service.Application.Models
         public string Symbol { get; init; } = default!;
         public string Name { get; init; } = default!;
         public string ConvertCurrency { get; init; } = default!;
+        public string Source { get; set; } = null!;
 
         public decimal Price { get; init; }
         public decimal? MarketCap { get; init; }
@@ -18,6 +19,7 @@ namespace CoinMarketCap.Service.Application.Models
         public decimal? PercentChange1h { get; init; }
         public decimal? PercentChange24h { get; init; }
         public decimal? PercentChange7d { get; init; }
+        public int? Rank { get; set; }
         public DateTimeOffset LastUpdatedUtc { get; init; }
     }
 }

@@ -43,9 +43,15 @@ namespace CoinMarketCap.Service.Application.Services
                 return;
             }
 
+            foreach (var price in prices)
+            {
+                price.Source = "CoinMarketCap";
+            }
+
             var snapshot = new CryptoPriceSnapshot
             {
                 CreatedAtUtc = DateTimeOffset.UtcNow,
+                Source = "CoinMarketCap",
                 Prices = prices
             };
 

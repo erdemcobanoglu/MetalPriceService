@@ -51,6 +51,9 @@ namespace CoinMarketCap.Service.Infrastructure.Persistence.Mapping
             builder.Property(x => x.LastUpdatedUtc)
                 .IsRequired();
 
+            builder.Property(x => x.Source)
+           .HasMaxLength(50);
+
             builder.HasIndex(x => new { x.Symbol, x.ConvertCurrency });
             builder.HasIndex(x => x.LastUpdatedUtc);
             builder.HasIndex(x => x.SnapshotId);
