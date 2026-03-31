@@ -425,3 +425,4 @@ appsettings.*.json
 /CarSalesPlatform/Presentation/TextFile.txt
 /TcmbRatesWorker/Logs/Packages.txt
 /ReadME.txt
+/CoinMarketCap.Service/Logs/Publish.txt
