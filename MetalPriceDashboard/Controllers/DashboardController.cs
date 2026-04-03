@@ -117,13 +117,26 @@ public sealed class DashboardController : Controller
 
     public async Task<IActionResult> RatesV2([FromQuery] RatesDashboardFilter filter, CancellationToken cancellationToken)
     {
-        var currencyCodes = await _dbContext.RatePeriodSummaries
+        var priorityCurrencies = new[] { "USD", "EUR", "GBP" };
+
+        var rawCurrencyCodes = await _dbContext.RatePeriodSummaries
             .AsNoTracking()
             .Where(x => !string.IsNullOrWhiteSpace(x.CurrencyCode))
             .Select(x => x.CurrencyCode)
             .Distinct()
-            .OrderBy(x => x)
             .ToListAsync(cancellationToken);
+
+        var currencyCodes = rawCurrencyCodes
+            .OrderBy(x =>
+            {
+                var index = Array.FindIndex(
+                    priorityCurrencies,
+                    p => string.Equals(p, x, StringComparison.OrdinalIgnoreCase));
+
+                return index >= 0 ? index : 999;
+            })
+            .ThenBy(x => x)
+            .ToList();
 
         IQueryable<RatePeriodSummary> query = _dbContext.RatePeriodSummaries.AsNoTracking();
 
@@ -142,17 +155,15 @@ public sealed class DashboardController : Controller
              .ThenByDescending(x => x.PeriodStartDate)
              .ThenByDescending(x => x.PeriodEndDate)
              .ThenBy(x => x.PeriodTypeSort)
-             //.Take(1000)
              .ToListAsync(cancellationToken);
 
         var model = new RatesDashboardPageViewModel
         {
             Filter = filter,
             Items = items,
-            CurrencyCodes = currencyCodes
+            CurrencyCodes = currencyCodes,
+            Cards = BuildRateCards(items, filter)
         };
-
-        model.Cards = BuildRateCards(items, filter);
 
         return View(model);
     }
@@ -166,14 +177,24 @@ public sealed class DashboardController : Controller
             return [];
         }
 
+        var priorityCurrencies = new[] { "USD", "EUR", "GBP" };
+
         var selectedCurrencies = !string.IsNullOrWhiteSpace(filter.CurrencyCode)
-             ? new List<string> { filter.CurrencyCode! }
-    : items
-            .Select(x => x.CurrencyCode)
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(x => x)
-            .ToList();
+            ? new List<string> { filter.CurrencyCode! }
+            : items
+                .Select(x => x.CurrencyCode)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x =>
+                {
+                    var index = Array.FindIndex(
+                        priorityCurrencies,
+                        p => string.Equals(p, x, StringComparison.OrdinalIgnoreCase));
+
+                    return index >= 0 ? index : 999;
+                })
+                .ThenBy(x => x)
+                .ToList();
 
         var cards = new List<RateCardViewModel>();
 
