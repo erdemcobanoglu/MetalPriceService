@@ -396,74 +396,265 @@ public sealed class DashboardController : Controller
 
         return $"{valuationText} {directionText}";
     }
-     
+
     #endregion
 
     #region Ratios Process
 
-    public async Task<IActionResult> Ratios(CancellationToken cancellationToken)
+    public async Task<IActionResult> Ratios(
+    [FromQuery] RatiosDashboardFilter filter,
+    CancellationToken cancellationToken)
     {
-        var ratioSnapshots = await _dbContext.MetalPriceRatios
+        var baseMetals = new List<string> { "XAU", "XAG", "XPT", "XPD" };
+
+        var latestRatioSnapshot = await _dbContext.MetalPriceRatios
             .AsNoTracking()
             .OrderByDescending(x => x.SnapshotTime)
             .ThenByDescending(x => x.Id)
-            .Take(20)
-            .ToListAsync(cancellationToken);
+            .FirstOrDefaultAsync(cancellationToken);
 
-        var latestRatio = ratioSnapshots.FirstOrDefault();
+        var latestPriceSnapshot = await _dbContext.MetalPriceSnapshots
+            .AsNoTracking()
+            .OrderByDescending(x => x.TakenAtUtc)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
 
         var model = new RatiosDashboardPageViewModel
         {
-            SnapshotTime = latestRatio?.SnapshotTime,
-            CreatedAt = latestRatio?.CreatedAt
+            SnapshotTime = latestRatioSnapshot?.SnapshotTime,
+            CreatedAt = latestRatioSnapshot?.CreatedAt,
+            Filter = filter,
+            BaseMetals = baseMetals
         };
 
-        if (latestRatio is null)
+        if (latestRatioSnapshot is null || latestPriceSnapshot is null)
         {
             return View(model);
         }
 
-        var priceSnapshots = await _dbContext.MetalPriceSnapshots
-            .AsNoTracking()
-            .OrderByDescending(x => x.TakenAtUtc)
-            .ThenByDescending(x => x.Id)
-            .Take(20)
-            .ToListAsync(cancellationToken);
+        var nowUtc = latestPriceSnapshot.TakenAtUtc;
+        var periodStart = ResolvePeriodStart(filter.PeriodType, nowUtc);
 
-        var orderedRatioHistory = ratioSnapshots
+        var ratioHistory = await _dbContext.MetalPriceRatios
+            .AsNoTracking()
+            .Where(x => x.SnapshotTime >= periodStart)
             .OrderBy(x => x.SnapshotTime)
             .ThenBy(x => x.Id)
-            .ToList();
+            .ToListAsync(cancellationToken);
 
-        var orderedPriceHistory = priceSnapshots
+        var priceHistory = await _dbContext.MetalPriceSnapshots
+            .AsNoTracking()
+            .Where(x => x.TakenAtUtc >= periodStart)
             .OrderBy(x => x.TakenAtUtc)
             .ThenBy(x => x.Id)
-            .ToList();
+            .ToListAsync(cancellationToken);
 
-        model.Cards =
-        [
-            BuildPriceCard("XAU_PRICE", "XAU / USD", "XAU", orderedPriceHistory, x => x.XAU),
-            BuildRatioCard("XAU_XAG", "XAU / XAG", "XAU", "XAG", orderedRatioHistory, x => x.XAU_XAG, 1),
-            BuildRatioCard("XAU_XPT", "XAU / XPT", "XAU", "XPT", orderedRatioHistory, x => x.XAU_XPT, 2),
-            BuildRatioCard("XAU_XPD", "XAU / XPD", "XAU", "XPD", orderedRatioHistory, x => x.XAU_XPD, 3),
+        var selectedBaseMetals = !string.IsNullOrWhiteSpace(filter.BaseMetal)
+            ? new List<string> { filter.BaseMetal! }
+            : baseMetals;
 
-            BuildPriceCard("XAG_PRICE", "XAG / USD", "XAG", orderedPriceHistory, x => x.XAG),
-            BuildRatioCard("XAG_XAU", "XAG / XAU", "XAG", "XAU", orderedRatioHistory, x => x.XAG_XAU, 1),
-            BuildRatioCard("XAG_XPT", "XAG / XPT", "XAG", "XPT", orderedRatioHistory, x => x.XAG_XPT, 2),
-            BuildRatioCard("XAG_XPD", "XAG / XPD", "XAG", "XPD", orderedRatioHistory, x => x.XAG_XPD, 3),
+        var cards = new List<RatioCardViewModel>();
 
-            BuildPriceCard("XPT_PRICE", "XPT / USD", "XPT", orderedPriceHistory, x => x.XPT),
-            BuildRatioCard("XPT_XAU", "XPT / XAU", "XPT", "XAU", orderedRatioHistory, x => x.XPT_XAU, 1),
-            BuildRatioCard("XPT_XAG", "XPT / XAG", "XPT", "XAG", orderedRatioHistory, x => x.XPT_XAG, 2),
-            BuildRatioCard("XPT_XPD", "XPT / XPD", "XPT", "XPD", orderedRatioHistory, x => x.XPT_XPD, 3),
+        foreach (var baseMetal in selectedBaseMetals)
+        {
+            switch (baseMetal)
+            {
+                case "XAU":
+                    cards.Add(BuildPriceCardV2(
+                        key: "XAU_PRICE",
+                        title: "XAU / USD",
+                        baseMetal: "XAU",
+                        selectedPeriodType: filter.PeriodType,
+                        history: priceHistory,
+                        latestSnapshot: latestPriceSnapshot,
+                        selector: x => x.XAU));
 
-            BuildPriceCard("XPD_PRICE", "XPD / USD", "XPD", orderedPriceHistory, x => x.XPD),
-            BuildRatioCard("XPD_XAU", "XPD / XAU", "XPD", "XAU", orderedRatioHistory, x => x.XPD_XAU, 1),
-            BuildRatioCard("XPD_XAG", "XPD / XAG", "XPD", "XAG", orderedRatioHistory, x => x.XPD_XAG, 2),
-            BuildRatioCard("XPD_XPT", "XPD / XPT", "XPD", "XPT", orderedRatioHistory, x => x.XPD_XPT, 3)
-        ];
+                    cards.Add(BuildRatioCardV2(
+                        key: "XAU_XAG",
+                        title: "XAU / XAG",
+                        baseMetal: "XAU",
+                        quoteMetal: "XAG",
+                        selectedPeriodType: filter.PeriodType,
+                        history: ratioHistory,
+                        latestRatio: latestRatioSnapshot,
+                        selector: x => x.XAU_XAG,
+                        sortOrder: 1));
 
+                    cards.Add(BuildRatioCardV2(
+                        key: "XAU_XPT",
+                        title: "XAU / XPT",
+                        baseMetal: "XAU",
+                        quoteMetal: "XPT",
+                        selectedPeriodType: filter.PeriodType,
+                        history: ratioHistory,
+                        latestRatio: latestRatioSnapshot,
+                        selector: x => x.XAU_XPT,
+                        sortOrder: 2));
+
+                    cards.Add(BuildRatioCardV2(
+                        key: "XAU_XPD",
+                        title: "XAU / XPD",
+                        baseMetal: "XAU",
+                        quoteMetal: "XPD",
+                        selectedPeriodType: filter.PeriodType,
+                        history: ratioHistory,
+                        latestRatio: latestRatioSnapshot,
+                        selector: x => x.XAU_XPD,
+                        sortOrder: 3));
+                    break;
+
+                case "XAG":
+                    cards.Add(BuildPriceCardV2(
+                        key: "XAG_PRICE",
+                        title: "XAG / USD",
+                        baseMetal: "XAG",
+                        selectedPeriodType: filter.PeriodType,
+                        history: priceHistory,
+                        latestSnapshot: latestPriceSnapshot,
+                        selector: x => x.XAG));
+
+                    cards.Add(BuildRatioCardV2(
+                        key: "XAG_XAU",
+                        title: "XAG / XAU",
+                        baseMetal: "XAG",
+                        quoteMetal: "XAU",
+                        selectedPeriodType: filter.PeriodType,
+                        history: ratioHistory,
+                        latestRatio: latestRatioSnapshot,
+                        selector: x => x.XAG_XAU,
+                        sortOrder: 1));
+
+                    cards.Add(BuildRatioCardV2(
+                        key: "XAG_XPT",
+                        title: "XAG / XPT",
+                        baseMetal: "XAG",
+                        quoteMetal: "XPT",
+                        selectedPeriodType: filter.PeriodType,
+                        history: ratioHistory,
+                        latestRatio: latestRatioSnapshot,
+                        selector: x => x.XAG_XPT,
+                        sortOrder: 2));
+
+                    cards.Add(BuildRatioCardV2(
+                        key: "XAG_XPD",
+                        title: "XAG / XPD",
+                        baseMetal: "XAG",
+                        quoteMetal: "XPD",
+                        selectedPeriodType: filter.PeriodType,
+                        history: ratioHistory,
+                        latestRatio: latestRatioSnapshot,
+                        selector: x => x.XAG_XPD,
+                        sortOrder: 3));
+                    break;
+
+                case "XPT":
+                    cards.Add(BuildPriceCardV2(
+                        key: "XPT_PRICE",
+                        title: "XPT / USD",
+                        baseMetal: "XPT",
+                        selectedPeriodType: filter.PeriodType,
+                        history: priceHistory,
+                        latestSnapshot: latestPriceSnapshot,
+                        selector: x => x.XPT));
+
+                    cards.Add(BuildRatioCardV2(
+                        key: "XPT_XAU",
+                        title: "XPT / XAU",
+                        baseMetal: "XPT",
+                        quoteMetal: "XAU",
+                        selectedPeriodType: filter.PeriodType,
+                        history: ratioHistory,
+                        latestRatio: latestRatioSnapshot,
+                        selector: x => x.XPT_XAU,
+                        sortOrder: 1));
+
+                    cards.Add(BuildRatioCardV2(
+                        key: "XPT_XAG",
+                        title: "XPT / XAG",
+                        baseMetal: "XPT",
+                        quoteMetal: "XAG",
+                        selectedPeriodType: filter.PeriodType,
+                        history: ratioHistory,
+                        latestRatio: latestRatioSnapshot,
+                        selector: x => x.XPT_XAG,
+                        sortOrder: 2));
+
+                    cards.Add(BuildRatioCardV2(
+                        key: "XPT_XPD",
+                        title: "XPT / XPD",
+                        baseMetal: "XPT",
+                        quoteMetal: "XPD",
+                        selectedPeriodType: filter.PeriodType,
+                        history: ratioHistory,
+                        latestRatio: latestRatioSnapshot,
+                        selector: x => x.XPT_XPD,
+                        sortOrder: 3));
+                    break;
+
+                case "XPD":
+                    cards.Add(BuildPriceCardV2(
+                        key: "XPD_PRICE",
+                        title: "XPD / USD",
+                        baseMetal: "XPD",
+                        selectedPeriodType: filter.PeriodType,
+                        history: priceHistory,
+                        latestSnapshot: latestPriceSnapshot,
+                        selector: x => x.XPD));
+
+                    cards.Add(BuildRatioCardV2(
+                        key: "XPD_XAU",
+                        title: "XPD / XAU",
+                        baseMetal: "XPD",
+                        quoteMetal: "XAU",
+                        selectedPeriodType: filter.PeriodType,
+                        history: ratioHistory,
+                        latestRatio: latestRatioSnapshot,
+                        selector: x => x.XPD_XAU,
+                        sortOrder: 1));
+
+                    cards.Add(BuildRatioCardV2(
+                        key: "XPD_XAG",
+                        title: "XPD / XAG",
+                        baseMetal: "XPD",
+                        quoteMetal: "XAG",
+                        selectedPeriodType: filter.PeriodType,
+                        history: ratioHistory,
+                        latestRatio: latestRatioSnapshot,
+                        selector: x => x.XPD_XAG,
+                        sortOrder: 2));
+
+                    cards.Add(BuildRatioCardV2(
+                        key: "XPD_XPT",
+                        title: "XPD / XPT",
+                        baseMetal: "XPD",
+                        quoteMetal: "XPT",
+                        selectedPeriodType: filter.PeriodType,
+                        history: ratioHistory,
+                        latestRatio: latestRatioSnapshot,
+                        selector: x => x.XPD_XPT,
+                        sortOrder: 3));
+                    break;
+            }
+        }
+
+        model.Cards = cards;
         return View(model);
+    }
+
+    private static DateTime ResolvePeriodStart(string? periodType, DateTime referenceUtc)
+    {
+        return (periodType ?? string.Empty).ToUpperInvariant() switch
+        {
+            "WEEK" => referenceUtc.AddDays(-7),
+            "MONTH" => referenceUtc.AddMonths(-1),
+            "3MONTH" => referenceUtc.AddMonths(-3),
+            "6MONTH" => referenceUtc.AddMonths(-6),
+            "YEAR" => referenceUtc.AddYears(-1),
+            "2YEAR" => referenceUtc.AddYears(-2),
+            "3YEAR" => referenceUtc.AddYears(-3),
+            "5YEAR" => referenceUtc.AddYears(-5),
+            _ => referenceUtc.AddMonths(-1)
+        };
     }
 
     private static RatioCardViewModel BuildRatioCard(
@@ -620,6 +811,250 @@ public sealed class DashboardController : Controller
             History = values,
             SparklinePoints = BuildSparklinePoints(values)
         };
+    }
+
+    private static RatioCardViewModel BuildPriceCardV2(
+    string key,
+    string title,
+    string baseMetal,
+    string? selectedPeriodType,
+    List<MetalPriceSnapshot> history,
+    MetalPriceSnapshot latestSnapshot,
+    Func<MetalPriceSnapshot, decimal> selector)
+    {
+        var historyValues = history.Select(selector).ToList();
+        var historyCurrent = historyValues.LastOrDefault();
+        var historyPrevious = historyValues.Count > 1 ? historyValues[^2] : (decimal?)null;
+        var historyAverage = historyValues.Count == 0 ? 0m : historyValues.Average();
+
+        var currentValue = selector(latestSnapshot);
+        var benchmarkValue = historyAverage;
+
+        var change = benchmarkValue != 0m
+            ? currentValue - benchmarkValue
+            : 0m;
+
+        var changePercent = benchmarkValue != 0m
+            ? (change / benchmarkValue) * 100m
+            : 0m;
+
+        var direction = "flat";
+        var arrow = "→";
+
+        if (benchmarkValue != 0m)
+        {
+            if (currentValue > benchmarkValue)
+            {
+                direction = "up";
+                arrow = "↑";
+            }
+            else if (currentValue < benchmarkValue)
+            {
+                direction = "down";
+                arrow = "↓";
+            }
+        }
+
+        string valuation;
+        if (historyAverage == 0m)
+        {
+            valuation = "Fair";
+        }
+        else if (historyCurrent > historyAverage * 1.02m)
+        {
+            valuation = "Overvalued";
+        }
+        else if (historyCurrent < historyAverage * 0.98m)
+        {
+            valuation = "Undervalued";
+        }
+        else
+        {
+            valuation = "Fair";
+        }
+
+        var interpretation = BuildPriceInterpretationV2(baseMetal, selectedPeriodType, direction, valuation);
+
+        return new RatioCardViewModel
+        {
+            Key = key,
+            Title = title,
+            BaseMetal = baseMetal,
+            QuoteMetal = "USD",
+            SortOrder = 0,
+            ValueLabel = "Current Price Reference",
+            CurrentValue = currentValue,
+            PreviousValue = historyPrevious,
+            Change = change,
+            ChangePercent = changePercent,
+            Average = historyAverage,
+            Valuation = valuation,
+            Direction = direction,
+            DirectionArrow = arrow,
+            Interpretation = interpretation,
+            History = historyValues,
+            SparklinePoints = BuildSparklinePoints(historyValues)
+        };
+    }
+
+    private static RatioCardViewModel BuildRatioCardV2(
+    string key,
+    string title,
+    string baseMetal,
+    string quoteMetal,
+    string? selectedPeriodType,
+    List<MetalPriceRatio> history,
+    MetalPriceRatio latestRatio,
+    Func<MetalPriceRatio, decimal> selector,
+    int sortOrder)
+    {
+        var historyValues = history.Select(selector).ToList();
+        var historyCurrent = historyValues.LastOrDefault();
+        var historyPrevious = historyValues.Count > 1 ? historyValues[^2] : (decimal?)null;
+        var historyAverage = historyValues.Count == 0 ? 0m : historyValues.Average();
+
+        var currentValue = selector(latestRatio);
+        var benchmarkValue = historyAverage;
+
+        var change = benchmarkValue != 0m
+            ? currentValue - benchmarkValue
+            : 0m;
+
+        var changePercent = benchmarkValue != 0m
+            ? (change / benchmarkValue) * 100m
+            : 0m;
+
+        var direction = "flat";
+        var arrow = "→";
+
+        if (benchmarkValue != 0m)
+        {
+            if (currentValue > benchmarkValue)
+            {
+                direction = "up";
+                arrow = "↑";
+            }
+            else if (currentValue < benchmarkValue)
+            {
+                direction = "down";
+                arrow = "↓";
+            }
+        }
+
+        string valuation;
+        if (historyAverage == 0m)
+        {
+            valuation = "Fair";
+        }
+        else if (historyCurrent > historyAverage * 1.02m)
+        {
+            valuation = "Overvalued";
+        }
+        else if (historyCurrent < historyAverage * 0.98m)
+        {
+            valuation = "Undervalued";
+        }
+        else
+        {
+            valuation = "Fair";
+        }
+
+        var interpretation = BuildRatioInterpretationV2(baseMetal, quoteMetal, selectedPeriodType, direction, valuation);
+
+        return new RatioCardViewModel
+        {
+            Key = key,
+            Title = title,
+            BaseMetal = baseMetal,
+            QuoteMetal = quoteMetal,
+            SortOrder = sortOrder,
+            ValueLabel = "Current Ratio Reference",
+            CurrentValue = currentValue,
+            PreviousValue = historyPrevious,
+            Change = change,
+            ChangePercent = changePercent,
+            Average = historyAverage,
+            Valuation = valuation,
+            Direction = direction,
+            DirectionArrow = arrow,
+            Interpretation = interpretation,
+            History = historyValues,
+            SparklinePoints = BuildSparklinePoints(historyValues)
+        };
+    }
+
+
+    private static string BuildPriceInterpretationV2(
+    string metal,
+    string? selectedPeriodType,
+    string direction,
+    string valuation)
+    {
+        var periodLabel = selectedPeriodType switch
+        {
+            "WEEK" => "haftalık",
+            "MONTH" => "aylık",
+            "3MONTH" => "3 aylık",
+            "6MONTH" => "6 aylık",
+            "YEAR" => "yıllık",
+            "2YEAR" => "2 yıllık",
+            "3YEAR" => "3 yıllık",
+            "5YEAR" => "5 yıllık",
+            _ => "seçili dönem"
+        };
+
+        var valuationText = valuation switch
+        {
+            "Overvalued" => $"{metal} fiyatı {periodLabel} ortalamanın üzerinde seyrediyor.",
+            "Undervalued" => $"{metal} fiyatı {periodLabel} ortalamanın altında seyrediyor.",
+            _ => $"{metal} fiyatı {periodLabel} ortalamaya yakın seyrediyor."
+        };
+
+        var directionText = direction switch
+        {
+            "up" => "Güncel referans değer seçili dönem ortalamasının üzerinde.",
+            "down" => "Güncel referans değer seçili dönem ortalamasının altında.",
+            _ => "Güncel referans değer seçili dönem ortalamasına yakın."
+        };
+
+        return $"{valuationText} {directionText}";
+    }
+
+    private static string BuildRatioInterpretationV2(
+        string baseMetal,
+        string quoteMetal,
+        string? selectedPeriodType,
+        string direction,
+        string valuation)
+    {
+        var periodLabel = selectedPeriodType switch
+        {
+            "WEEK" => "haftalık",
+            "MONTH" => "aylık",
+            "3MONTH" => "3 aylık",
+            "6MONTH" => "6 aylık",
+            "YEAR" => "yıllık",
+            "2YEAR" => "2 yıllık",
+            "3YEAR" => "3 yıllık",
+            "5YEAR" => "5 yıllık",
+            _ => "seçili dönem"
+        };
+
+        var valuationText = valuation switch
+        {
+            "Overvalued" => $"{baseMetal}, {quoteMetal}'ye göre {periodLabel} ortalamanın üzerinde fiyatlanıyor.",
+            "Undervalued" => $"{baseMetal}, {quoteMetal}'ye göre {periodLabel} ortalamanın altında fiyatlanıyor.",
+            _ => $"{baseMetal} / {quoteMetal}, {periodLabel} ortalamaya yakın seyrediyor."
+        };
+
+        var directionText = direction switch
+        {
+            "up" => "Güncel referans oran seçili dönem ortalamasının üzerinde.",
+            "down" => "Güncel referans oran seçili dönem ortalamasının altında.",
+            _ => "Güncel referans oran seçili dönem ortalamasına yakın."
+        };
+
+        return $"{valuationText} {directionText}";
     }
 
     private static string BuildPriceInterpretation(

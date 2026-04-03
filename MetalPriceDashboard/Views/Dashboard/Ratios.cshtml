@@ -13,6 +13,31 @@
             return index == -1 ? int.MaxValue : index;
         })
         .ToList();
+
+    var periodOptions = new List<(string Value, string Text)>
+    {
+        ("WEEK", "Haftalık"),
+        ("MONTH", "Aylık"),
+        ("3MONTH", "3 Aylık"),
+        ("6MONTH", "6 Aylık"),
+        ("YEAR", "Yıllık"),
+        ("2YEAR", "2 Yıllık"),
+        ("3YEAR", "3 Yıllık"),
+        ("5YEAR", "5 Yıllık")
+    };
+
+    var selectedPeriodText = periodOptions
+        .FirstOrDefault(x => string.Equals(x.Value, Model.Filter?.PeriodType, StringComparison.OrdinalIgnoreCase))
+        .Text;
+
+    if (string.IsNullOrWhiteSpace(selectedPeriodText))
+    {
+        selectedPeriodText = "Aylık";
+    }
+
+    var baseMetals = Model.BaseMetals != null && Model.BaseMetals.Any()
+        ? Model.BaseMetals
+        : metalOrder.ToList();
 }
 
 <style>
@@ -35,6 +60,14 @@
             font-size: 1.5rem;
             font-weight: 700;
         }
+
+    .filter-card {
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 18px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, .04);
+    }
 
     .metals-rows {
         display: flex;
@@ -238,6 +271,12 @@
         font-size: .92rem;
         line-height: 1.4;
     }
+
+    .ratio-context-note {
+        font-size: .8rem;
+        color: #6b7280;
+        margin-top: -4px;
+    }
 </style>
 
 <div class="container mt-4">
@@ -254,6 +293,50 @@
             {
                 <div><strong>Created At:</strong> @Model.CreatedAt.Value.ToString("dd.MM.yyyy HH:mm:ss")</div>
             }
+        </div>
+
+        <div class="filter-card">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Base Metal</label>
+                    <select name="BaseMetal" class="form-select">
+                        <option value="">All</option>
+                        @foreach (var metal in baseMetals)
+                        {
+                            if (string.Equals(Model.Filter.BaseMetal, metal, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <option value="@metal" selected>@metal</option>
+                            }
+                            else
+                            {
+                                <option value="@metal">@metal</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Period Type</label>
+                    <select name="PeriodType" class="form-select">
+                        @foreach (var option in periodOptions)
+                        {
+                            if (string.Equals(Model.Filter.PeriodType, option.Value, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <option value="@option.Value" selected>@option.Text</option>
+                            }
+                            else
+                            {
+                                <option value="@option.Value">@option.Text</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="col-md-4 d-flex align-items-end gap-2">
+                    <button type="submit" class="btn btn-primary">Apply</button>
+                    <a asp-action="Ratios" class="btn btn-outline-secondary">Clear</a>
+                </div>
+            </form>
         </div>
 
         @if (!groupedCards.Any())
@@ -290,6 +373,8 @@
                                     _ => "valuation-fair"
                                 };
 
+                                var isUsdPriceCard = string.Equals(card.QuoteMetal, "USD", StringComparison.OrdinalIgnoreCase);
+
                                 <div class="ratio-card">
                                     <div class="ratio-card-header">
                                         <h4 class="ratio-title">@card.Title</h4>
@@ -299,14 +384,27 @@
                                     <div class="ratio-main">
                                         <div>
                                             <div class="ratio-value">
-                                                @card.CurrentValue.ToString("N4")@(card.QuoteMetal == "$" ? " $" : "")
+                                                @if (card.QuoteMetal == "USD")
+                                                {
+                                                    @Math.Truncate(card.CurrentValue).ToString("N0")
+                                                }
+                                                else
+                                                {
+                                                    @card.CurrentValue.ToString("N3")
+                                                }
                                             </div>
                                             <div class="ratio-sub">@card.ValueLabel</div>
+                                            <div class="ratio-context-note">
+                                                @(isUsdPriceCard
+                                                    ? $"{card.BaseMetal} için en güncel fiyat referansı"
+                                                    : $"{card.BaseMetal} / {card.QuoteMetal} için en güncel oran referansı")
+                                            </div>
                                         </div>
 
                                         <div class="ratio-trend @trendClass">
                                             <div>@card.DirectionArrow @card.Change.ToString("N4")</div>
                                             <div>(@card.ChangePercent.ToString("N2")%)</div>
+                                            <div class="ratio-context-note">@selectedPeriodText ortalamasına göre fark</div>
                                         </div>
                                     </div>
 
@@ -320,17 +418,33 @@
                                         </svg>
                                     </div>
 
+                                    <div class="ratio-context-note">
+                                        Trend analizi: @selectedPeriodText
+                                    </div>
+
                                     <div class="ratio-stats">
                                         <div class="stat-box">
-                                            <div class="stat-label">Previous</div>
+                                            <div class="stat-label">@selectedPeriodText Previous</div>
                                             <div class="stat-value">
-                                                @(card.PreviousValue?.ToString("N4") ?? "-")
+                                                @(
+                                                    card.PreviousValue == null
+                                                    ? "-"
+                                                    : card.QuoteMetal == "USD"
+                                                    ? Math.Truncate(card.PreviousValue.Value).ToString("N0")
+                                                    : card.PreviousValue.Value.ToString("N4")
+                                                    )
                                             </div>
                                         </div>
 
                                         <div class="stat-box">
-                                            <div class="stat-label">20-Point Avg</div>
-                                            <div class="stat-value">@card.Average.ToString("N4")</div>
+                                            <div class="stat-label">@selectedPeriodText Avg</div>
+                                            <div class="stat-value">
+                                                @(
+                                                    card.QuoteMetal == "USD"
+                                                    ? Math.Truncate(card.Average).ToString("N0")
+                                                    : card.Average.ToString("N4")
+                                                    )
+                                            </div>
                                         </div>
                                     </div>
 
