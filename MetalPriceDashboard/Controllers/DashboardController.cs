@@ -73,8 +73,7 @@ public sealed class DashboardController : Controller
         return View(model);
     }
 
-    #region rates Process
-
+    #region rates Process 
     public async Task<IActionResult> Rates([FromQuery] RatesDashboardFilter filter, CancellationToken cancellationToken)
     {
         var currencyCodes = await _dbContext.RatePeriodSummaries
@@ -178,23 +177,12 @@ public sealed class DashboardController : Controller
                 g => g.First(),
                 StringComparer.OrdinalIgnoreCase);
 
-        var currentSeriesByCurrency = currentReferenceItems
-            .GroupBy(x => x.CurrencyCode, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(
-                g => g.Key,
-                g => g
-                    .OrderBy(x => x.PeriodStartDate)
-                    .ThenBy(x => x.PeriodTypeSort)
-                    .TakeLast(20)
-                    .ToList(),
-                StringComparer.OrdinalIgnoreCase);
-
         var model = new RatesDashboardPageViewModel
         {
             Filter = filter,
             Items = historyItems,
             CurrencyCodes = currencyCodes,
-            Cards = BuildRateCards(historyItems, latestCurrentByCurrency, currentSeriesByCurrency, filter)
+            Cards = BuildRateCards(historyItems, latestCurrentByCurrency, filter)
         };
 
         return View(model);
@@ -203,7 +191,6 @@ public sealed class DashboardController : Controller
     private static List<RateCardViewModel> BuildRateCards(
         List<RatePeriodSummary> historyItems,
         IReadOnlyDictionary<string, RatePeriodSummary> latestCurrentByCurrency,
-        IReadOnlyDictionary<string, List<RatePeriodSummary>> currentSeriesByCurrency,
         RatesDashboardFilter filter)
     {
         if (historyItems == null || historyItems.Count == 0)
@@ -247,9 +234,6 @@ public sealed class DashboardController : Controller
             }
 
             latestCurrentByCurrency.TryGetValue(currencyCode, out var latestCurrent);
-            currentSeriesByCurrency.TryGetValue(currencyCode, out var currentSeries);
-
-            currentSeries ??= [];
 
             cards.Add(BuildRateCard(
                 key: $"{currencyCode}_ForexBuying",
@@ -259,7 +243,6 @@ public sealed class DashboardController : Controller
                 selectedPeriodType: filter.PeriodType,
                 history: history,
                 latestCurrent: latestCurrent,
-                currentSeries: currentSeries,
                 selector: x => ((x.ForexBuyingMin ?? 0m) + (x.ForexBuyingMax ?? 0m)) / 2m));
 
             cards.Add(BuildRateCard(
@@ -270,7 +253,6 @@ public sealed class DashboardController : Controller
                 selectedPeriodType: filter.PeriodType,
                 history: history,
                 latestCurrent: latestCurrent,
-                currentSeries: currentSeries,
                 selector: x => ((x.ForexSellingMin ?? 0m) + (x.ForexSellingMax ?? 0m)) / 2m));
 
             cards.Add(BuildRateCard(
@@ -281,7 +263,6 @@ public sealed class DashboardController : Controller
                 selectedPeriodType: filter.PeriodType,
                 history: history,
                 latestCurrent: latestCurrent,
-                currentSeries: currentSeries,
                 selector: x => ((x.BanknoteSellingMin ?? 0m) + (x.BanknoteSellingMax ?? 0m)) / 2m));
         }
 
@@ -296,7 +277,6 @@ public sealed class DashboardController : Controller
         string? selectedPeriodType,
         List<RatePeriodSummary> history,
         RatePeriodSummary? latestCurrent,
-        List<RatePeriodSummary> currentSeries,
         Func<RatePeriodSummary, decimal> selector)
     {
         var historyValues = history.Select(selector).ToList();
@@ -304,37 +284,31 @@ public sealed class DashboardController : Controller
         var historyPrevious = historyValues.Count > 1 ? historyValues[^2] : (decimal?)null;
         var historyAverage = historyValues.Count == 0 ? 0m : historyValues.Average();
 
-        var currentSeriesValues = currentSeries
-            .OrderBy(x => x.PeriodStartDate)
-            .ThenBy(x => x.PeriodTypeSort)
-            .Select(selector)
-            .ToList();
-
         var currentValue = latestCurrent != null
             ? selector(latestCurrent)
             : historyCurrent;
 
-        var currentPrevious = currentSeriesValues.Count > 1 ? currentSeriesValues[^2] : (decimal?)null;
+        var benchmarkValue = historyAverage;
 
-        var currentChange = currentPrevious.HasValue
-            ? currentValue - currentPrevious.Value
+        var currentChange = benchmarkValue != 0m
+            ? currentValue - benchmarkValue
             : 0m;
 
-        var currentChangePercent = currentPrevious.HasValue && currentPrevious.Value != 0m
-            ? (currentChange / currentPrevious.Value) * 100m
+        var currentChangePercent = benchmarkValue != 0m
+            ? (currentChange / benchmarkValue) * 100m
             : 0m;
 
         var direction = "flat";
         var arrow = "→";
 
-        if (currentPrevious.HasValue)
+        if (benchmarkValue != 0m)
         {
-            if (currentValue > currentPrevious.Value)
+            if (currentValue > benchmarkValue)
             {
                 direction = "up";
                 arrow = "↑";
             }
-            else if (currentValue < currentPrevious.Value)
+            else if (currentValue < benchmarkValue)
             {
                 direction = "down";
                 arrow = "↓";
@@ -415,13 +389,14 @@ public sealed class DashboardController : Controller
 
         var directionText = direction switch
         {
-            "up" => "Güncel aylık referansta yukarı yönlü hareket var.",
-            "down" => "Güncel aylık referansta aşağı yönlü hareket var.",
-            _ => "Güncel aylık referansta belirgin yön yok."
+            "up" => "Güncel referans değer seçili dönem ortalamasının üzerinde.",
+            "down" => "Güncel referans değer seçili dönem ortalamasının altında.",
+            _ => "Güncel referans değer seçili dönem ortalamasına yakın."
         };
 
         return $"{valuationText} {directionText}";
     }
+     
     #endregion
 
     #region Ratios Process
