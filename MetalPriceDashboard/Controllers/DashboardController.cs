@@ -62,7 +62,6 @@ public sealed class DashboardController : Controller
             .ThenBy(x => x.MetalSort)
             .ThenBy(x => x.PeriodStartDate)
             .ThenBy(x => x.PeriodTypeSort)
-            //.Take(1000)
             .ToListAsync(cancellationToken);
 
         var model = new MetalDashboardPageViewModel
@@ -73,17 +72,18 @@ public sealed class DashboardController : Controller
 
         return View(model);
     }
+
     #region rates Process
 
     public async Task<IActionResult> Rates([FromQuery] RatesDashboardFilter filter, CancellationToken cancellationToken)
     {
         var currencyCodes = await _dbContext.RatePeriodSummaries
-        .AsNoTracking()
-        .Where(x => !string.IsNullOrWhiteSpace(x.CurrencyCode))
-        .Select(x => x.CurrencyCode)
-        .Distinct()
-        .OrderBy(x => x)
-        .ToListAsync(cancellationToken);
+            .AsNoTracking()
+            .Where(x => !string.IsNullOrWhiteSpace(x.CurrencyCode))
+            .Select(x => x.CurrencyCode)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToListAsync(cancellationToken);
 
         IQueryable<RatePeriodSummary> query = _dbContext.RatePeriodSummaries.AsNoTracking();
 
@@ -133,46 +133,80 @@ public sealed class DashboardController : Controller
                     priorityCurrencies,
                     p => string.Equals(p, x, StringComparison.OrdinalIgnoreCase));
 
-                return index >= 0 ? index : 999;
+                return index == -1 ? int.MaxValue : index;
             })
             .ThenBy(x => x)
             .ToList();
 
-        IQueryable<RatePeriodSummary> query = _dbContext.RatePeriodSummaries.AsNoTracking();
+        IQueryable<RatePeriodSummary> historyQuery = _dbContext.RatePeriodSummaries.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(filter.CurrencyCode))
         {
-            query = query.Where(x => x.CurrencyCode == filter.CurrencyCode);
+            historyQuery = historyQuery.Where(x => x.CurrencyCode == filter.CurrencyCode);
         }
 
         if (!string.IsNullOrWhiteSpace(filter.PeriodType))
         {
-            query = query.Where(x => x.PeriodType == filter.PeriodType);
+            historyQuery = historyQuery.Where(x => x.PeriodType == filter.PeriodType);
         }
 
-        var items = await query
-             .OrderBy(x => x.CurrencyCode)
-             .ThenByDescending(x => x.PeriodStartDate)
-             .ThenByDescending(x => x.PeriodEndDate)
-             .ThenBy(x => x.PeriodTypeSort)
-             .ToListAsync(cancellationToken);
+        var historyItems = await historyQuery
+            .OrderBy(x => x.CurrencyCode)
+            .ThenBy(x => x.PeriodStartDate)
+            .ThenBy(x => x.PeriodTypeSort)
+            .ToListAsync(cancellationToken);
+
+        IQueryable<RatePeriodSummary> currentReferenceQuery = _dbContext.RatePeriodSummaries
+            .AsNoTracking()
+            .Where(x => x.PeriodType == "MONTH");
+
+        if (!string.IsNullOrWhiteSpace(filter.CurrencyCode))
+        {
+            currentReferenceQuery = currentReferenceQuery.Where(x => x.CurrencyCode == filter.CurrencyCode);
+        }
+
+        var currentReferenceItems = await currentReferenceQuery
+            .OrderBy(x => x.CurrencyCode)
+            .ThenByDescending(x => x.PeriodEndDate)
+            .ThenByDescending(x => x.PeriodStartDate)
+            .ToListAsync(cancellationToken);
+
+        var latestCurrentByCurrency = currentReferenceItems
+            .GroupBy(x => x.CurrencyCode, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g.First(),
+                StringComparer.OrdinalIgnoreCase);
+
+        var currentSeriesByCurrency = currentReferenceItems
+            .GroupBy(x => x.CurrencyCode, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g
+                    .OrderBy(x => x.PeriodStartDate)
+                    .ThenBy(x => x.PeriodTypeSort)
+                    .TakeLast(20)
+                    .ToList(),
+                StringComparer.OrdinalIgnoreCase);
 
         var model = new RatesDashboardPageViewModel
         {
             Filter = filter,
-            Items = items,
+            Items = historyItems,
             CurrencyCodes = currencyCodes,
-            Cards = BuildRateCards(items, filter)
+            Cards = BuildRateCards(historyItems, latestCurrentByCurrency, currentSeriesByCurrency, filter)
         };
 
         return View(model);
     }
 
     private static List<RateCardViewModel> BuildRateCards(
-    List<RatePeriodSummary> items,
-    RatesDashboardFilter filter)
+        List<RatePeriodSummary> historyItems,
+        IReadOnlyDictionary<string, RatePeriodSummary> latestCurrentByCurrency,
+        IReadOnlyDictionary<string, List<RatePeriodSummary>> currentSeriesByCurrency,
+        RatesDashboardFilter filter)
     {
-        if (items == null || items.Count == 0)
+        if (historyItems == null || historyItems.Count == 0)
         {
             return [];
         }
@@ -181,7 +215,7 @@ public sealed class DashboardController : Controller
 
         var selectedCurrencies = !string.IsNullOrWhiteSpace(filter.CurrencyCode)
             ? new List<string> { filter.CurrencyCode! }
-            : items
+            : historyItems
                 .Select(x => x.CurrencyCode)
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -191,7 +225,7 @@ public sealed class DashboardController : Controller
                         priorityCurrencies,
                         p => string.Equals(p, x, StringComparison.OrdinalIgnoreCase));
 
-                    return index >= 0 ? index : 999;
+                    return index == -1 ? int.MaxValue : index;
                 })
                 .ThenBy(x => x)
                 .ToList();
@@ -200,7 +234,7 @@ public sealed class DashboardController : Controller
 
         foreach (var currencyCode in selectedCurrencies)
         {
-            var history = items
+            var history = historyItems
                 .Where(x => string.Equals(x.CurrencyCode, currencyCode, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(x => x.PeriodStartDate)
                 .ThenBy(x => x.PeriodTypeSort)
@@ -212,12 +246,20 @@ public sealed class DashboardController : Controller
                 continue;
             }
 
+            latestCurrentByCurrency.TryGetValue(currencyCode, out var latestCurrent);
+            currentSeriesByCurrency.TryGetValue(currencyCode, out var currentSeries);
+
+            currentSeries ??= [];
+
             cards.Add(BuildRateCard(
                 key: $"{currencyCode}_ForexBuying",
                 title: $"{currencyCode} / Forex Buying",
                 currencyCode: currencyCode,
                 metricName: "Forex Buying",
+                selectedPeriodType: filter.PeriodType,
                 history: history,
+                latestCurrent: latestCurrent,
+                currentSeries: currentSeries,
                 selector: x => ((x.ForexBuyingMin ?? 0m) + (x.ForexBuyingMax ?? 0m)) / 2m));
 
             cards.Add(BuildRateCard(
@@ -225,7 +267,10 @@ public sealed class DashboardController : Controller
                 title: $"{currencyCode} / Forex Selling",
                 currencyCode: currencyCode,
                 metricName: "Forex Selling",
+                selectedPeriodType: filter.PeriodType,
                 history: history,
+                latestCurrent: latestCurrent,
+                currentSeries: currentSeries,
                 selector: x => ((x.ForexSellingMin ?? 0m) + (x.ForexSellingMax ?? 0m)) / 2m));
 
             cards.Add(BuildRateCard(
@@ -233,7 +278,10 @@ public sealed class DashboardController : Controller
                 title: $"{currencyCode} / Banknote Selling",
                 currencyCode: currencyCode,
                 metricName: "Banknote Selling",
+                selectedPeriodType: filter.PeriodType,
                 history: history,
+                latestCurrent: latestCurrent,
+                currentSeries: currentSeries,
                 selector: x => ((x.BanknoteSellingMin ?? 0m) + (x.BanknoteSellingMax ?? 0m)) / 2m));
         }
 
@@ -245,47 +293,64 @@ public sealed class DashboardController : Controller
         string title,
         string currencyCode,
         string metricName,
+        string? selectedPeriodType,
         List<RatePeriodSummary> history,
+        RatePeriodSummary? latestCurrent,
+        List<RatePeriodSummary> currentSeries,
         Func<RatePeriodSummary, decimal> selector)
     {
-        var values = history.Select(selector).ToList();
-        var current = values.LastOrDefault();
-        var previous = values.Count > 1 ? values[^2] : (decimal?)null;
+        var historyValues = history.Select(selector).ToList();
+        var historyCurrent = historyValues.LastOrDefault();
+        var historyPrevious = historyValues.Count > 1 ? historyValues[^2] : (decimal?)null;
+        var historyAverage = historyValues.Count == 0 ? 0m : historyValues.Average();
 
-        var change = previous.HasValue ? current - previous.Value : 0m;
-        var changePercent = previous.HasValue && previous.Value != 0m
-            ? (change / previous.Value) * 100m
+        var currentSeriesValues = currentSeries
+            .OrderBy(x => x.PeriodStartDate)
+            .ThenBy(x => x.PeriodTypeSort)
+            .Select(selector)
+            .ToList();
+
+        var currentValue = latestCurrent != null
+            ? selector(latestCurrent)
+            : historyCurrent;
+
+        var currentPrevious = currentSeriesValues.Count > 1 ? currentSeriesValues[^2] : (decimal?)null;
+
+        var currentChange = currentPrevious.HasValue
+            ? currentValue - currentPrevious.Value
+            : 0m;
+
+        var currentChangePercent = currentPrevious.HasValue && currentPrevious.Value != 0m
+            ? (currentChange / currentPrevious.Value) * 100m
             : 0m;
 
         var direction = "flat";
         var arrow = "→";
 
-        if (previous.HasValue)
+        if (currentPrevious.HasValue)
         {
-            if (current > previous.Value)
+            if (currentValue > currentPrevious.Value)
             {
                 direction = "up";
                 arrow = "↑";
             }
-            else if (current < previous.Value)
+            else if (currentValue < currentPrevious.Value)
             {
                 direction = "down";
                 arrow = "↓";
             }
         }
 
-        var average = values.Count == 0 ? 0m : values.Average();
-
         string valuation;
-        if (average == 0m)
+        if (historyAverage == 0m)
         {
             valuation = "Fair";
         }
-        else if (current > average * 1.02m)
+        else if (historyCurrent > historyAverage * 1.02m)
         {
             valuation = "Overvalued";
         }
-        else if (current < average * 0.98m)
+        else if (historyCurrent < historyAverage * 0.98m)
         {
             valuation = "Undervalued";
         }
@@ -294,7 +359,12 @@ public sealed class DashboardController : Controller
             valuation = "Fair";
         }
 
-        var interpretation = BuildRateInterpretation(currencyCode, metricName, direction, valuation);
+        var interpretation = BuildRateInterpretation(
+            currencyCode: currencyCode,
+            metricName: metricName,
+            selectedPeriodType: selectedPeriodType,
+            direction: direction,
+            valuation: valuation);
 
         return new RateCardViewModel
         {
@@ -302,42 +372,60 @@ public sealed class DashboardController : Controller
             Title = title,
             CurrencyCode = currencyCode,
             MetricName = metricName,
-            CurrentValue = current,
-            PreviousValue = previous,
-            Change = change,
-            ChangePercent = changePercent,
-            Average = average,
+            CurrentValue = currentValue,
+            PreviousValue = historyPrevious,
+            Change = currentChange,
+            ChangePercent = currentChangePercent,
+            Average = historyAverage,
             Valuation = valuation,
             Direction = direction,
             DirectionArrow = arrow,
             Interpretation = interpretation,
-            History = values,
-            SparklinePoints = BuildSparklinePoints(values)
+            History = historyValues,
+            SparklinePoints = BuildSparklinePoints(historyValues)
         };
     }
 
     private static string BuildRateInterpretation(
         string currencyCode,
         string metricName,
+        string? selectedPeriodType,
         string direction,
         string valuation)
     {
-        return valuation switch
+        var periodLabel = selectedPeriodType switch
         {
-            "Overvalued" => $"{currencyCode} için {metricName} kısa dönem ortalamasının üzerinde.",
-            "Undervalued" => $"{currencyCode} için {metricName} kısa dönem ortalamasının altında.",
-            _ => direction switch
-            {
-                "up" => $"{currencyCode} için {metricName} kısa vadede yükseliş eğiliminde.",
-                "down" => $"{currencyCode} için {metricName} kısa vadede düşüş eğiliminde.",
-                _ => $"{currencyCode} için {metricName} tarafında belirgin kısa vadeli yön yok."
-            }
+            "WEEK" => "haftalık",
+            "MONTH" => "aylık",
+            "3MONTH" => "3 aylık",
+            "6MONTH" => "6 aylık",
+            "YEAR" => "yıllık",
+            "2YEAR" => "2 yıllık",
+            "3YEAR" => "3 yıllık",
+            "5YEAR" => "5 yıllık",
+            _ => "seçili dönem"
         };
+
+        var valuationText = valuation switch
+        {
+            "Overvalued" => $"{currencyCode} için {metricName}, {periodLabel} ortalamanın üzerinde seyrediyor.",
+            "Undervalued" => $"{currencyCode} için {metricName}, {periodLabel} ortalamanın altında seyrediyor.",
+            _ => $"{currencyCode} için {metricName}, {periodLabel} ortalamaya yakın seyrediyor."
+        };
+
+        var directionText = direction switch
+        {
+            "up" => "Güncel aylık referansta yukarı yönlü hareket var.",
+            "down" => "Güncel aylık referansta aşağı yönlü hareket var.",
+            _ => "Güncel aylık referansta belirgin yön yok."
+        };
+
+        return $"{valuationText} {directionText}";
     }
-
-
     #endregion
+
     #region Ratios Process
+
     public async Task<IActionResult> Ratios(CancellationToken cancellationToken)
     {
         var ratioSnapshots = await _dbContext.MetalPriceRatios
@@ -380,38 +468,37 @@ public sealed class DashboardController : Controller
         model.Cards =
         [
             BuildPriceCard("XAU_PRICE", "XAU / USD", "XAU", orderedPriceHistory, x => x.XAU),
-        BuildRatioCard("XAU_XAG", "XAU / XAG", "XAU", "XAG", orderedRatioHistory, x => x.XAU_XAG, 1),
-        BuildRatioCard("XAU_XPT", "XAU / XPT", "XAU", "XPT", orderedRatioHistory, x => x.XAU_XPT, 2),
-        BuildRatioCard("XAU_XPD", "XAU / XPD", "XAU", "XPD", orderedRatioHistory, x => x.XAU_XPD, 3),
+            BuildRatioCard("XAU_XAG", "XAU / XAG", "XAU", "XAG", orderedRatioHistory, x => x.XAU_XAG, 1),
+            BuildRatioCard("XAU_XPT", "XAU / XPT", "XAU", "XPT", orderedRatioHistory, x => x.XAU_XPT, 2),
+            BuildRatioCard("XAU_XPD", "XAU / XPD", "XAU", "XPD", orderedRatioHistory, x => x.XAU_XPD, 3),
 
-        BuildPriceCard("XAG_PRICE", "XAG / USD", "XAG", orderedPriceHistory, x => x.XAG),
-        BuildRatioCard("XAG_XAU", "XAG / XAU", "XAG", "XAU", orderedRatioHistory, x => x.XAG_XAU, 1),
-        BuildRatioCard("XAG_XPT", "XAG / XPT", "XAG", "XPT", orderedRatioHistory, x => x.XAG_XPT, 2),
-        BuildRatioCard("XAG_XPD", "XAG / XPD", "XAG", "XPD", orderedRatioHistory, x => x.XAG_XPD, 3),
+            BuildPriceCard("XAG_PRICE", "XAG / USD", "XAG", orderedPriceHistory, x => x.XAG),
+            BuildRatioCard("XAG_XAU", "XAG / XAU", "XAG", "XAU", orderedRatioHistory, x => x.XAG_XAU, 1),
+            BuildRatioCard("XAG_XPT", "XAG / XPT", "XAG", "XPT", orderedRatioHistory, x => x.XAG_XPT, 2),
+            BuildRatioCard("XAG_XPD", "XAG / XPD", "XAG", "XPD", orderedRatioHistory, x => x.XAG_XPD, 3),
 
-        BuildPriceCard("XPT_PRICE", "XPT / USD", "XPT", orderedPriceHistory, x => x.XPT),
-        BuildRatioCard("XPT_XAU", "XPT / XAU", "XPT", "XAU", orderedRatioHistory, x => x.XPT_XAU, 1),
-        BuildRatioCard("XPT_XAG", "XPT / XAG", "XPT", "XAG", orderedRatioHistory, x => x.XPT_XAG, 2),
-        BuildRatioCard("XPT_XPD", "XPT / XPD", "XPT", "XPD", orderedRatioHistory, x => x.XPT_XPD, 3),
+            BuildPriceCard("XPT_PRICE", "XPT / USD", "XPT", orderedPriceHistory, x => x.XPT),
+            BuildRatioCard("XPT_XAU", "XPT / XAU", "XPT", "XAU", orderedRatioHistory, x => x.XPT_XAU, 1),
+            BuildRatioCard("XPT_XAG", "XPT / XAG", "XPT", "XAG", orderedRatioHistory, x => x.XPT_XAG, 2),
+            BuildRatioCard("XPT_XPD", "XPT / XPD", "XPT", "XPD", orderedRatioHistory, x => x.XPT_XPD, 3),
 
-        BuildPriceCard("XPD_PRICE", "XPD / USD", "XPD", orderedPriceHistory, x => x.XPD),
-        BuildRatioCard("XPD_XAU", "XPD / XAU", "XPD", "XAU", orderedRatioHistory, x => x.XPD_XAU, 1),
-        BuildRatioCard("XPD_XAG", "XPD / XAG", "XPD", "XAG", orderedRatioHistory, x => x.XPD_XAG, 2),
-        BuildRatioCard("XPD_XPT", "XPD / XPT", "XPD", "XPT", orderedRatioHistory, x => x.XPD_XPT, 3)
+            BuildPriceCard("XPD_PRICE", "XPD / USD", "XPD", orderedPriceHistory, x => x.XPD),
+            BuildRatioCard("XPD_XAU", "XPD / XAU", "XPD", "XAU", orderedRatioHistory, x => x.XPD_XAU, 1),
+            BuildRatioCard("XPD_XAG", "XPD / XAG", "XPD", "XAG", orderedRatioHistory, x => x.XPD_XAG, 2),
+            BuildRatioCard("XPD_XPT", "XPD / XPT", "XPD", "XPT", orderedRatioHistory, x => x.XPD_XPT, 3)
         ];
 
         return View(model);
     }
 
-
     private static RatioCardViewModel BuildRatioCard(
-    string key,
-    string title,
-    string baseMetal,
-    string quoteMetal,
-    List<MetalPriceRatio> history,
-    Func<MetalPriceRatio, decimal> selector,
-    int sortOrder)
+        string key,
+        string title,
+        string baseMetal,
+        string quoteMetal,
+        List<MetalPriceRatio> history,
+        Func<MetalPriceRatio, decimal> selector,
+        int sortOrder)
     {
         var values = history.Select(selector).ToList();
         var current = values.LastOrDefault();
@@ -482,13 +569,13 @@ public sealed class DashboardController : Controller
             SparklinePoints = BuildSparklinePoints(values)
         };
     }
-     
+
     private static RatioCardViewModel BuildPriceCard(
-    string key,
-    string title,
-    string baseMetal,
-    List<MetalPriceSnapshot> history,
-    Func<MetalPriceSnapshot, decimal> selector)
+        string key,
+        string title,
+        string baseMetal,
+        List<MetalPriceSnapshot> history,
+        Func<MetalPriceSnapshot, decimal> selector)
     {
         var values = history.Select(selector).ToList();
         var current = values.LastOrDefault();
@@ -561,9 +648,9 @@ public sealed class DashboardController : Controller
     }
 
     private static string BuildPriceInterpretation(
-    string metal,
-    string direction,
-    string valuation)
+        string metal,
+        string direction,
+        string valuation)
     {
         return valuation switch
         {
@@ -579,10 +666,10 @@ public sealed class DashboardController : Controller
     }
 
     private static string BuildRatioInterpretation(
-    string baseMetal,
-    string quoteMetal,
-    string direction,
-    string valuation)
+        string baseMetal,
+        string quoteMetal,
+        string direction,
+        string valuation)
     {
         return valuation switch
         {
@@ -654,6 +741,7 @@ public sealed class DashboardController : Controller
 
         return View(model);
     }
+
     #endregion
 
     public IActionResult Error()

@@ -10,42 +10,30 @@
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct()
             .ToList();
+
+    var periodOptions = new List<(string Value, string Text)>
+    {
+        ("WEEK", "Haftalık"),
+        ("MONTH", "Aylık"),
+        ("3MONTH", "3 Aylık"),
+        ("6MONTH", "6 Aylık"),
+        ("YEAR", "Yıllık"),
+        ("2YEAR", "2 Yıllık"),
+        ("3YEAR", "3 Yıllık"),
+        ("5YEAR", "5 Yıllık")
+    };
+
+    var selectedPeriodText = periodOptions
+        .FirstOrDefault(x => string.Equals(x.Value, Model.Filter?.PeriodType, StringComparison.OrdinalIgnoreCase))
+        .Text;
+
+    if (string.IsNullOrWhiteSpace(selectedPeriodText))
+    {
+        selectedPeriodText = "Genel";
+    }
 }
 
 <style>
-    .table-scroll-top {
-        overflow-x: auto;
-        overflow-y: hidden;
-        height: 18px;
-        margin-bottom: 8px;
-    }
-
-    .table-scroll-top-inner {
-        height: 1px;
-    }
-
-    .table-responsive {
-        overflow-x: auto;
-    }
-
-    .currency-group-header td {
-        border-top: 3px solid #000 !important;
-        border-bottom: 3px solid #000 !important;
-        border-left: none !important;
-        border-right: none !important;
-        background-color: #f8f9fa !important;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .5px;
-        padding: 10px 12px;
-        font-size: 13px;
-        color: #333;
-    }
-
-    .currency-separator td {
-        border-top: 3px solid #000 !important;
-    }
-
     .rates-cards-grid {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -189,11 +177,29 @@
         font-size: .92rem;
         line-height: 1.4;
     }
+
+    .rate-context-note {
+        font-size: .8rem;
+        color: #6b7280;
+        margin-top: -4px;
+    }
+
+    @@media (max-width: 992px) {
+        .rates-cards-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 576px) {
+        .rates-cards-grid {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="mb-0">Rates Dashboard</h1>
-    <span class="text-muted">Toplam: @Model.Cards.Count kayıt</span>
+    <span class="text-muted">Toplam: @(Model.Cards?.Count ?? 0) kayıt</span>
 </div>
 
 <div class="card shadow-sm filter-card mb-4">
@@ -205,7 +211,7 @@
                     <option value="">All</option>
                     @foreach (var code in currencyCodes)
                     {
-                        if (Model.Filter.CurrencyCode == code)
+                        if (string.Equals(Model.Filter.CurrencyCode, code, StringComparison.OrdinalIgnoreCase))
                         {
                             <option value="@code" selected>@code</option>
                         }
@@ -221,32 +227,16 @@
                 <label class="form-label">Period Type</label>
                 <select name="PeriodType" class="form-select">
                     <option value="">All</option>
-
-                    @if (Model.Filter.PeriodType == "WEEK")
+                    @foreach (var option in periodOptions)
                     {
-                        <option value="WEEK" selected>WEEK</option>
-                    }
-                    else
-                    {
-                        <option value="WEEK">WEEK</option>
-                    }
-
-                    @if (Model.Filter.PeriodType == "MONTH")
-                    {
-                        <option value="MONTH" selected>MONTH</option>
-                    }
-                    else
-                    {
-                        <option value="MONTH">MONTH</option>
-                    }
-
-                    @if (Model.Filter.PeriodType == "YEAR")
-                    {
-                        <option value="YEAR" selected>YEAR</option>
-                    }
-                    else
-                    {
-                        <option value="YEAR">YEAR</option>
+                        if (string.Equals(Model.Filter.PeriodType, option.Value, StringComparison.OrdinalIgnoreCase))
+                        {
+                            <option value="@option.Value" selected>@option.Text</option>
+                        }
+                        else
+                        {
+                            <option value="@option.Value">@option.Text</option>
+                        }
                     }
                 </select>
             </div>
@@ -287,12 +277,14 @@
                 <div class="rate-main">
                     <div>
                         <div class="rate-value">@card.CurrentValue.ToString("N4")</div>
-                        <div class="rate-sub">@card.MetricName</div>
+                        <div class="rate-sub">Current Monthly Reference</div>
+                        <div class="rate-context-note">@card.MetricName için en güncel aylık referans</div>
                     </div>
 
                     <div class="rate-trend @trendClass">
                         <div>@card.DirectionArrow @card.Change.ToString("N4")</div>
                         <div>(@card.ChangePercent.ToString("N2")%)</div>
+                        <div class="rate-context-note">Aylık güncel değişim</div>
                     </div>
                 </div>
 
@@ -306,16 +298,20 @@
                     </svg>
                 </div>
 
+                <div class="rate-context-note">
+                    Trend analizi: @selectedPeriodText
+                </div>
+
                 <div class="rate-stats">
                     <div class="stat-box">
-                        <div class="stat-label">Previous</div>
+                        <div class="stat-label">@selectedPeriodText Previous</div>
                         <div class="stat-value">
                             @(card.PreviousValue?.ToString("N4") ?? "-")
                         </div>
                     </div>
 
                     <div class="stat-box">
-                        <div class="stat-label">20-Point Avg</div>
+                        <div class="stat-label">@selectedPeriodText Avg</div>
                         <div class="stat-value">@card.Average.ToString("N4")</div>
                     </div>
                 </div>
